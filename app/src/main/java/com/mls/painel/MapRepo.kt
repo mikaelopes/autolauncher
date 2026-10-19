@@ -19,9 +19,9 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
 
 object MapCfg {
     // OpenFreeMap: grátis, sem chave. Download offline permitido até 3.000 tiles / 50 MB.
-    const val STYLE_DAY = "https://tiles.openfreemap.org/styles/liberty"
-    const val STYLE_NIGHT = "https://tiles.openfreemap.org/styles/dark"
-    const val USER_AGENT = "PainelLauncher/1.5 (+https://github.com/mikaelopes/autolauncher)"
+    // Um estilo neutro só; as cores são repintadas em tempo real conforme tema e cor base
+    const val STYLE = "https://tiles.openfreemap.org/styles/positron"
+    const val USER_AGENT = "PainelLauncher/1.6 (+https://github.com/mikaelopes/autolauncher)"
 
     // Fortaleza-CE (cidade inteira + bordas de Caucaia, Maracanaú e Eusébio)
     const val NORTH = -3.68
@@ -68,7 +68,7 @@ class MapRepo(private val ctx: Context, private val prefs: Prefs) {
     }
 
     private fun downloadStyle(om: OfflineManager, i: Int) {
-        val styles = listOf(MapCfg.STYLE_DAY, MapCfg.STYLE_NIGHT)
+        val styles = listOf(MapCfg.STYLE)
         if (i >= styles.size) {
             state = MapDl.DONE
             progress = 1f

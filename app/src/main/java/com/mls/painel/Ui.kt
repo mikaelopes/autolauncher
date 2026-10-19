@@ -82,6 +82,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
@@ -92,6 +93,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -151,10 +155,10 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
         }
     }
 
-    val pal = remember(m.accent, m.base, night, m.dayLight) { palette(m.accent, m.base, night, m.dayLight) }
+    val pal = remember(m.theme, m.baseColor, night) { palette(m.theme, m.baseColor, night) }
 
     CompositionLocalProvider(LocalPal provides pal) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(pal.bg)) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(pal.bg, pal.bg2)))) {
             val s = minOf(constraints.maxWidth / DESIGN_W, constraints.maxHeight / DESIGN_H)
             val w = constraints.maxWidth / s
             val h = constraints.maxHeight / s
@@ -259,7 +263,7 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                 Modifier
                     .fillMaxWidth()
                     .height(rowH)
-                    .panel(p, 14)
+                    .panel(p, 14, p.tiles[i])
                     .combinedClickable(
                         enabled = !m.edit,
                         onLongClick = {
@@ -272,17 +276,17 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(p.ac),
+                    Modifier.size(48.dp).clip(RoundedCornerShape((12 + p.round / 2).dp)).background(p.iconBg),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
-                        glyph != null -> Ic(glyph, 26, p.on)
+                        glyph != null -> Ic(glyph, 26, p.iconFg)
                         app != null -> Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(34.dp))
-                        else -> Ic(Icons.Rounded.Add, 26, p.on)
+                        else -> Ic(Icons.Rounded.Add, 26, p.iconFg)
                     }
                 }
                 W(12)
-                T(s.label, 16, p.tx, FontWeight.Medium)
+                T(s.label, 16, p.tileFg, FontWeight.Medium)
             }
         }
         Row(Modifier.fillMaxWidth().height(rowH), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -310,14 +314,14 @@ fun SmallBtn(
     Column(
         modifier
             .fillMaxHeight()
-            .panel(p, 14)
+            .panel(p, 14, p.miniBg)
             .combinedClickable(enabled = enabled, onLongClick = onLong, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Ic(icon, 24, p.ac)
+        Ic(icon, 24, p.miniIcon)
         H(4)
-        T(label, 12, p.tx2)
+        T(label, 12, p.miniFg)
     }
 }
 
@@ -358,18 +362,27 @@ fun RightArea(m: LauncherModel, rowH: Dp, gap: Dp, modifier: Modifier, requestLo
 fun Block(m: LauncherModel, slot: Int, kind: String, v: Variant, modifier: Modifier, requestLocation: () -> Unit) {
     val p = LocalPal.current
     val selected = m.edit && m.sel == slot
-    Box(modifier.panel(p, 14, if (selected) lerp(p.cd, p.ac, 0.28f) else p.cd)) {
-        if (kind == "speed" && m.showMap) {
-            MapBlock(m, requestLocation)
-        } else {
-            Box(
-                Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                when (kind) {
-                    "clock" -> ClockBlock(m, v)
-                    "speed" -> SpeedBlock(m, v, requestLocation)
-                    else -> MediaBlock(m, v)
+    val isMap = kind == "speed" && m.showMap
+    // Cada bloco tem a sua cor no tema Blocos; o texto dentro acompanha
+    val local = when {
+        kind == "clock" -> p.copy(cd = p.clockBg, tx = p.clockFg, tx2 = p.clockMut)
+        kind == "speed" && !isMap -> p.copy(cd = p.speedBg, tx = p.speedFg, tx2 = p.speedFg.copy(alpha = 0.75f))
+        else -> p
+    }
+    Box(modifier.panel(p, 14, if (selected) lerp(local.cd, p.ac, 0.28f) else local.cd)) {
+        CompositionLocalProvider(LocalPal provides local) {
+            if (isMap) {
+                MapBlock(m, requestLocation)
+            } else {
+                Box(
+                    Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when (kind) {
+                        "clock" -> ClockBlock(m, v)
+                        "speed" -> SpeedBlock(m, v, requestLocation)
+                        else -> MediaBlock(m, v)
+                    }
                 }
             }
         }
@@ -624,9 +637,9 @@ fun Art(bmp: ImageBitmap?, size: Int, title: String) {
     val p = LocalPal.current
     // Sem capa: bloco colorido com a inicial da música (cor fixa por música)
     val tile = if (title.isEmpty()) p.cd2 else {
-        val list = if (p.light) ACCENTS_LIGHT else ACCENTS
+        val list = listOf(p.ac, lerp(p.ac, Color.Black, 0.25f), lerp(p.ac, Color.White, 0.2f))
         val c = list[Math.floorMod(title.hashCode(), list.size)]
-        if (p.night) lerp(c, Color.Black, 0.45f) else c
+        if (p.night) lerp(c, Color.Black, 0.35f) else c
     }
     Box(
         Modifier.size(size.dp).panel(p, 12, if (bmp != null) p.cd2 else tile),
@@ -870,37 +883,10 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                     m.edit = true
                 }
             }
-            SetRow("Cor de destaque") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ACCENTS.forEachIndexed { i, c ->
-                        Box(
-                            Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .background(c)
-                                .border(2.dp, if (i == m.accent) p.tx else Color.Transparent, CircleShape)
-                                .clickable { m.updAccent(i) }
-                        )
-                    }
-                }
+            SetRow("Tema") {
+                Seg(listOf("Vidro", "Blocos"), m.theme) { m.updTheme(it) }
             }
-            SetRow("Fundo") {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    BASES.forEachIndexed { i, b ->
-                        val shape = RoundedCornerShape(8.dp)
-                        Box(
-                            Modifier
-                                .clip(shape)
-                                .background(b.cd)
-                                .border(if (i == m.base) 2.dp else 1.dp, if (i == m.base) p.ac else Color(0xFF3A3F48), shape)
-                                .clickable { m.updBase(i) }
-                                .padding(horizontal = 12.dp, vertical = 7.dp)
-                        ) {
-                            T(b.name, 12, Color(0xFFECEEF1))
-                        }
-                    }
-                }
-            }
+            BaseColorPicker(m)
             SetRow("Mapa na tela inicial") {
                 Seg(listOf("Não", "Sim"), if (m.showMap) 1 else 0) { m.updMap(it == 1) }
             }
@@ -909,11 +895,8 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                     MapDl.RUNNING -> Chip("Baixando ${(m.map.progress * 100).roundToInt()}%") {}
                     MapDl.DONE -> Chip("Baixado · atualizar", Icons.Rounded.Check) { m.downloadMap() }
                     MapDl.ERROR -> Chip("Erro · tentar de novo", primary = true) { m.downloadMap() }
-                    MapDl.IDLE -> Chip("Baixar (~40 MB)", primary = true) { m.downloadMap() }
+                    MapDl.IDLE -> Chip("Baixar (~20 MB)", primary = true) { m.downloadMap() }
                 }
-            }
-            SetRow("Tema de dia") {
-                Seg(listOf("Claro", "Escuro"), if (m.dayLight) 0 else 1) { m.updDayLight(it == 0) }
             }
             SetRow("Modo noturno") {
                 Seg(listOf("Desligado", "Automático", "Sempre"), m.nightMode) { m.updNight(it) }
@@ -1064,7 +1047,82 @@ fun H(n: Int) = Spacer(Modifier.height(n.dp))
 
 /** Fundo + borda visível: no sol forte a borda é o que separa um botão do outro. */
 fun Modifier.panel(p: Pal, radius: Int, bg: Color = p.cd, border: Boolean = true): Modifier {
-    val shape = RoundedCornerShape(radius.dp)
+    val shape = RoundedCornerShape((radius + p.round).dp)
     val m = this.clip(shape).background(bg)
-    return if (border) m.border(if (p.light) 1.5.dp else 1.dp, p.bd, shape) else m
+    return if (border && bg.alpha > 0f && p.bd.alpha > 0f) m.border(1.dp, p.bd, shape) else m
+}
+
+
+// ---------------------------------------------------------------- seletor de cor base
+
+private val BASE_PRESETS = listOf(0xFF1D4ED8, 0xFF0E7490, 0xFF15803D, 0xFF7C3AED, 0xFFBE185D, 0xFFB45309, 0xFF475569).map { it.toInt() }
+
+/** Três trilhos R, G e B. A tela inteira muda ao arrastar; salva ao soltar. */
+@Composable
+fun BaseColorPicker(m: LauncherModel) {
+    val p = LocalPal.current
+    val base = Color(m.baseColor)
+    Column(Modifier.fillMaxWidth().panel(p, 10, p.cd2).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(28.dp).clip(CircleShape).background(base).border(2.dp, p.tx, CircleShape))
+            W(10)
+            T("Cor base", 13, p.tx, modifier = Modifier.weight(1f))
+            T("#%06X".format(m.baseColor and 0xFFFFFF), 12, p.tx2)
+            W(10)
+            Chip("Padrão") { m.previewBase(DEFAULT_BASE); m.saveBase() }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BASE_PRESETS.forEach { c ->
+                Box(
+                    Modifier.size(26.dp).clip(CircleShape).background(Color(c))
+                        .border(2.dp, if (c == m.baseColor) p.tx else Color.Transparent, CircleShape)
+                        .clickable { m.previewBase(c); m.saveBase() }
+                )
+            }
+        }
+        val r = (m.baseColor shr 16) and 0xFF
+        val g = (m.baseColor shr 8) and 0xFF
+        val b = m.baseColor and 0xFF
+        fun set(nr: Int, ng: Int, nb: Int) = m.previewBase((0xFF shl 24) or (nr shl 16) or (ng shl 8) or nb)
+        ChannelSlider("R", r, Color(0, g, b), Color(255, g, b), { set(it, g, b) }) { m.saveBase() }
+        ChannelSlider("G", g, Color(r, 0, b), Color(r, 255, b), { set(r, it, b) }) { m.saveBase() }
+        ChannelSlider("B", b, Color(r, g, 0), Color(r, g, 255), { set(r, g, it) }) { m.saveBase() }
+    }
+}
+
+@Composable
+fun ChannelSlider(label: String, value: Int, from: Color, to: Color, onChange: (Int) -> Unit, onDone: () -> Unit) {
+    val p = LocalPal.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        T(label, 12, p.tx2, modifier = Modifier.width(16.dp))
+        BoxWithConstraints(
+            Modifier
+                .weight(1f)
+                .height(28.dp)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(onDragEnd = onDone) { change, _ ->
+                        onChange(((change.position.x / size.width) * 255f).roundToInt().coerceIn(0, 255))
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures { pos ->
+                        onChange(((pos.x / size.width) * 255f).roundToInt().coerceIn(0, 255))
+                        onDone()
+                    }
+                },
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Box(
+                Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp))
+                    .background(Brush.horizontalGradient(listOf(from, to)))
+                    .border(1.dp, p.bd, RoundedCornerShape(5.dp))
+            )
+            val x = maxWidth * (value / 255f) - 11.dp
+            Box(
+                Modifier.padding(start = x.coerceAtLeast(0.dp)).size(22.dp).clip(CircleShape)
+                    .background(Color.White).border(2.dp, Color(0xFF1B1F24), CircleShape)
+            )
+        }
+        T(value.toString(), 12, p.tx2, align = TextAlign.End, modifier = Modifier.width(34.dp))
+    }
 }

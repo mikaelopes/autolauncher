@@ -47,7 +47,9 @@ class LauncherModel(val ctx: Context) {
         private set
     var showMedia by mutableStateOf(prefs.showMedia)
         private set
-    var dayLight by mutableStateOf(prefs.dayLight)
+    var theme by mutableStateOf(prefs.theme)
+        private set
+    var baseColor by mutableStateOf(prefs.baseColor)
         private set
     var showMap by mutableStateOf(prefs.showMap)
         private set
@@ -125,7 +127,11 @@ class LauncherModel(val ctx: Context) {
     fun updBase(v: Int) { base = v; prefs.base = v }
     fun updNight(v: Int) { nightMode = v; prefs.nightMode = v }
     fun updMedia(v: Boolean) { showMedia = v; prefs.showMedia = v }
-    fun updDayLight(v: Boolean) { dayLight = v; prefs.dayLight = v }
+    fun updTheme(v: Int) { theme = v; prefs.theme = v }
+
+    /** Só atualiza a tela; salva quando soltar o controle. */
+    fun previewBase(v: Int) { baseColor = v }
+    fun saveBase() { prefs.baseColor = baseColor }
 
     /** Mapa ocupa o bloco grande; a mídia vai para o estreito. */
     fun updMap(v: Boolean) {

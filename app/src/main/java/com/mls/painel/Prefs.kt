@@ -58,13 +58,22 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("day_light", true)
         set(v) = p.edit().putBoolean("day_light", v).apply()
 
+    /** 0 = Vidro, 1 = Blocos */
+    var theme: Int
+        get() = p.getInt("theme2", THEME_BLOCKS)
+        set(v) = p.edit().putInt("theme2", v).apply()
+
+    var baseColor: Int
+        get() = p.getInt("base_color", DEFAULT_BASE)
+        set(v) = p.edit().putInt("base_color", v).apply()
+
     var showMap: Boolean
         get() = p.getBoolean("show_map", false)
         set(v) = p.edit().putBoolean("show_map", v).apply()
 
     var mapReady: Boolean
-        get() = p.getBoolean("map_ready", false)
-        set(v) = p.edit().putBoolean("map_ready", v).apply()
+        get() = p.getBoolean("map_ready_v2", false)
+        set(v) = p.edit().putBoolean("map_ready_v2", v).apply()
 
     var showMedia: Boolean
         get() = p.getBoolean("show_media", true)

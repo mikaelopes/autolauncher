@@ -36,6 +36,13 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.BackgroundLayer
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import kotlin.math.roundToInt
 
 /** Mapa offline com a posição do carro e a velocidade no canto. */
@@ -45,7 +52,7 @@ fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
     val p = LocalPal.current
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val styleUrl = if (p.light) MapCfg.STYLE_DAY else MapCfg.STYLE_NIGHT
+    val mp = p.map
 
     val mapView = remember {
         MapRepo.init(ctx)
@@ -89,11 +96,12 @@ fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
         }
     }
 
-    // Troca o estilo (claro de dia, escuro à noite) e liga o marcador de posição
-    LaunchedEffect(map, styleUrl) {
+    // Carrega o estilo uma vez e liga o marcador de posição
+    LaunchedEffect(map) {
         val mm = map ?: return@LaunchedEffect
         style = null
-        mm.setStyle(Style.Builder().fromUri(styleUrl)) { st ->
+        mm.setStyle(Style.Builder().fromUri(MapCfg.STYLE)) { st ->
+            paintMap(st, mp)
             if (m.gps.hasPermission()) {
                 try {
                     val lc = mm.locationComponent
@@ -111,6 +119,11 @@ fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
             }
             style = st
         }
+    }
+
+    // Repinta quando muda tema, dia/noite ou cor base
+    LaunchedEffect(style, mp) {
+        style?.let { paintMap(it, mp) }
     }
 
     // Segue o carro: aproxima mais devagar, afasta em velocidade, mapa gira com a direção
@@ -169,11 +182,54 @@ fun SpeedBadge(m: LauncherModel, modifier: Modifier) {
     val sp by animateFloatAsState(if (fix) m.gps.speedKmh else 0f, tween(450), label = "badge")
     val over = m.alertKmh > 0 && sp > m.alertKmh
     Row(
-        modifier.panel(p, 12, if (over) p.red else p.cd).padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier.panel(p, 12, if (over) p.red else p.speedBg).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        T(if (fix) sp.roundToInt().toString() else "--", 30, if (over) androidx.compose.ui.graphics.Color.White else p.tx, FontWeight.Medium)
+        T(if (fix) sp.roundToInt().toString() else "--", 30, if (over) androidx.compose.ui.graphics.Color.White else p.speedFg, FontWeight.Medium)
         W(4)
-        T("km/h", 12, if (over) androidx.compose.ui.graphics.Color.White else p.tx2, modifier = Modifier.padding(bottom = 5.dp))
+        T("km/h", 12, if (over) androidx.compose.ui.graphics.Color.White else p.speedFg.copy(alpha = 0.75f), modifier = Modifier.padding(bottom = 5.dp))
+    }
+}
+
+
+private val MAJOR = Regex("motorway|trunk|primary|major")
+
+/** Repinta as camadas do estilo base com as cores do tema atual. */
+fun paintMap(st: Style, mp: MapPal) {
+    val building = lerp(mp.land, mp.casing, 0.45f).toArgb()
+    for (layer in st.layers) {
+        val id = layer.id.lowercase()
+        try {
+            when (layer) {
+                is BackgroundLayer -> layer.setProperties(PropertyFactory.backgroundColor(mp.land.toArgb()))
+                is FillLayer -> layer.setProperties(
+                    PropertyFactory.fillColor(
+                        when {
+                            "water" in id -> mp.water.toArgb()
+                            "park" in id || "wood" in id || "grass" in id || "landcover" in id -> mp.park.toArgb()
+                            "building" in id -> building
+                            else -> mp.land.toArgb()
+                        }
+                    )
+                )
+                is LineLayer -> when {
+                    "waterway" in id || "water" in id -> layer.setProperties(PropertyFactory.lineColor(mp.water.toArgb()))
+                    "boundary" in id || "admin" in id -> layer.setProperties(PropertyFactory.lineColor(mp.casing.toArgb()))
+                    "casing" in id || "outline" in id -> layer.setProperties(
+                        PropertyFactory.lineColor(if (MAJOR.containsMatchIn(id)) mp.mainCasing.toArgb() else mp.casing.toArgb())
+                    )
+                    "road" in id || "highway" in id || "street" in id || "bridge" in id || "tunnel" in id || "path" in id ->
+                        layer.setProperties(
+                            PropertyFactory.lineColor(if (MAJOR.containsMatchIn(id)) mp.main.toArgb() else mp.road.toArgb())
+                        )
+                    "rail" in id -> layer.setProperties(PropertyFactory.lineColor(mp.casing.toArgb()))
+                }
+                is SymbolLayer -> layer.setProperties(
+                    PropertyFactory.textColor(mp.label.toArgb()),
+                    PropertyFactory.textHaloColor(mp.land.toArgb())
+                )
+            }
+        } catch (e: Exception) {
+        }
     }
 }
