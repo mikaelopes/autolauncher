@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -1264,16 +1265,15 @@ fun MediaEmpty(m: LauncherModel, v: Variant) {
         Triple(m.slots[2].label, glyphFor(m.slots[2].label, m.slots[2].pkg) ?: Icons.Rounded.MusicNote) { m.tapSlot(2) },
         Triple("Retomar", Icons.Rounded.PlayArrow) { m.resumeMedia() }
     )
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
-        T("Nada tocando", 15, p.tx2, FontWeight.Medium,
-            align = if (v == Variant.NARROW) TextAlign.Center else TextAlign.Start, modifier = Modifier.fillMaxWidth())
-        if (v == Variant.NARROW) {
-            opts.forEach { MediaEmptyBtn(Modifier.fillMaxWidth(), it) }
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                opts.forEach { MediaEmptyBtn(Modifier.weight(1f), it) }
-            }
-        }
+    // Pilha centralizada, mesma largura para os três botões
+    Column(
+        Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)
+    ) {
+        T("Nada tocando", 15, p.tx2, FontWeight.Medium, align = TextAlign.Center)
+        val w = if (v == Variant.NARROW) Modifier.fillMaxWidth() else Modifier.widthIn(max = 260.dp).fillMaxWidth()
+        opts.forEach { MediaEmptyBtn(w, it) }
     }
 }
 
