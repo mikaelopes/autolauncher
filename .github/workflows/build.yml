@@ -25,7 +25,13 @@ jobs:
       - name: Compilar
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          set -o pipefail
+          if ! ./gradlew assembleDebug 2>&1 | tee build.log; then
+            grep -E "^e: |error:|What went wrong|Could not|Failed to|> " build.log | grep -v "^> Task" | head -25 | while IFS= read -r line; do
+              echo "::error title=Build::$line"
+            done
+            exit 1
+          fi
 
       - name: Renomear APK
         run: cp app/build/outputs/apk/debug/app-debug.apk Painel.apk
