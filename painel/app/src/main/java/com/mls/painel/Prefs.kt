@@ -1,0 +1,95 @@
+package com.mls.painel
+
+import android.content.Context
+
+data class Slot(val pkg: String, val label: String)
+
+class Prefs(ctx: Context) {
+    private val p = ctx.getSharedPreferences("painel", Context.MODE_PRIVATE)
+
+    fun slot(i: Int): Slot = Slot(
+        p.getString("s${i}_pkg", "") ?: "",
+        p.getString("s${i}_label", DEFAULT_LABELS[i]) ?: DEFAULT_LABELS[i]
+    )
+
+    fun setSlot(i: Int, s: Slot) {
+        p.edit().putString("s${i}_pkg", s.pkg).putString("s${i}_label", s.label).apply()
+    }
+
+    var initialized: Boolean
+        get() = p.getBoolean("initialized", false)
+        set(v) = p.edit().putBoolean("initialized", v).apply()
+
+    var hintShown: Boolean
+        get() = p.getBoolean("hint_shown", false)
+        set(v) = p.edit().putBoolean("hint_shown", v).apply()
+
+    var eqPkg: String
+        get() = p.getString("eq_pkg", "") ?: ""
+        set(v) = p.edit().putString("eq_pkg", v).apply()
+
+    var leftSide: Boolean
+        get() = p.getBoolean("left_side", true)
+        set(v) = p.edit().putBoolean("left_side", v).apply()
+
+    var order: List<String>
+        get() {
+            val raw = (p.getString("order", DEFAULT_ORDER) ?: DEFAULT_ORDER).split(",")
+            return if (raw.size == 3 && raw.toSet() == DEFAULT_ORDER.split(",").toSet()) raw
+            else DEFAULT_ORDER.split(",")
+        }
+        set(v) = p.edit().putString("order", v.joinToString(",")).apply()
+
+    var accent: Int
+        get() = p.getInt("accent", 0)
+        set(v) = p.edit().putInt("accent", v).apply()
+
+    var base: Int
+        get() = p.getInt("base", 0)
+        set(v) = p.edit().putInt("base", v).apply()
+
+    /** 0 = desligado, 1 = automático, 2 = sempre */
+    var nightMode: Int
+        get() = p.getInt("night_mode", 1)
+        set(v) = p.edit().putInt("night_mode", v).apply()
+
+    var showMedia: Boolean
+        get() = p.getBoolean("show_media", true)
+        set(v) = p.edit().putBoolean("show_media", v).apply()
+
+    var dimScreen: Boolean
+        get() = p.getBoolean("dim_screen", false)
+        set(v) = p.edit().putBoolean("dim_screen", v).apply()
+
+    var savedBrightness: Int
+        get() = p.getInt("saved_brightness", -1)
+        set(v) = p.edit().putInt("saved_brightness", v).apply()
+
+    var savedBrightnessMode: Int
+        get() = p.getInt("saved_brightness_mode", 0)
+        set(v) = p.edit().putInt("saved_brightness_mode", v).apply()
+
+    /** 0 = desligado */
+    var alertKmh: Int
+        get() = p.getInt("alert_kmh", 110)
+        set(v) = p.edit().putInt("alert_kmh", v).apply()
+
+    val wTemp: Float get() = p.getFloat("w_temp", 0f)
+    val wCode: Int get() = p.getInt("w_code", 0)
+    val wIsDay: Boolean get() = p.getBoolean("w_day", true)
+    val wTs: Long get() = p.getLong("w_ts", 0L)
+
+    fun saveWeather(w: Weather, ts: Long) {
+        p.edit()
+            .putFloat("w_temp", w.temp)
+            .putInt("w_code", w.code)
+            .putBoolean("w_day", w.isDay)
+            .putLong("w_ts", ts)
+            .apply()
+    }
+
+    companion object {
+        val DEFAULT_LABELS = listOf("CarPlay", "Áudio BT", "Rádio")
+        const val DEFAULT_ORDER = "clock,speed,media"
+    }
+}
