@@ -269,13 +269,13 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(lerp(p.cd, p.ac, 0.2f)),
+                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(p.ac),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
-                        glyph != null -> Ic(glyph, 26, p.ac)
+                        glyph != null -> Ic(glyph, 26, p.on)
                         app != null -> Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(34.dp))
-                        else -> Ic(Icons.Rounded.Add, 26, p.ac)
+                        else -> Ic(Icons.Rounded.Add, 26, p.on)
                     }
                 }
                 W(12)
@@ -312,7 +312,7 @@ fun SmallBtn(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Ic(icon, 24, p.tx)
+        Ic(icon, 24, p.ac)
         H(4)
         T(label, 12, p.tx2)
     }
@@ -433,15 +433,15 @@ fun ClockBlock(m: LauncherModel, v: Variant) {
     }
 }
 
-private data class WInfo(val icon: ImageVector, val desc: String, val tint: Color)
+private data class WInfo(val icon: ImageVector, val desc: String, val tint: Color, val tintLight: Color = tint)
 
 private fun weatherInfo(code: Int, day: Boolean): WInfo = when (code) {
-    0 -> if (day) WInfo(Icons.Rounded.WbSunny, "Ensolarado", Color(0xFFEF9F27))
+    0 -> if (day) WInfo(Icons.Rounded.WbSunny, "Ensolarado", Color(0xFFEF9F27), Color(0xFFF08C00))
     else WInfo(Icons.Rounded.NightsStay, "Céu limpo", Color(0xFFAFA9EC))
-    1, 2 -> WInfo(Icons.Rounded.WbCloudy, "Poucas nuvens", Color(0xFFD3D1C7))
-    3 -> WInfo(Icons.Rounded.Cloud, "Nublado", Color(0xFFB4B2A9))
+    1, 2 -> WInfo(Icons.Rounded.WbCloudy, "Poucas nuvens", Color(0xFFD3D1C7), Color(0xFF4F8FD6))
+    3 -> WInfo(Icons.Rounded.Cloud, "Nublado", Color(0xFFB4B2A9), Color(0xFF6B7A90))
     45, 48 -> WInfo(Icons.Rounded.Cloud, "Neblina", Color(0xFFB4B2A9))
-    in 51..67, in 80..82 -> WInfo(Icons.Rounded.Umbrella, "Chuva", Color(0xFF85B7EB))
+    in 51..67, in 80..82 -> WInfo(Icons.Rounded.Umbrella, "Chuva", Color(0xFF85B7EB), Color(0xFF1A73E8))
     in 71..77, 85, 86 -> WInfo(Icons.Rounded.AcUnit, "Neve", Color(0xFFB5D4F4))
     in 95..99 -> WInfo(Icons.Rounded.FlashOn, "Tempestade", Color(0xFFFAC775))
     else -> WInfo(Icons.Rounded.Cloud, "Tempo", Color(0xFFB4B2A9))
@@ -463,7 +463,7 @@ fun WeatherView(m: LauncherModel) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         val tint = when {
             p.night -> lerp(info.tint, p.bg, 0.25f)
-            p.light -> lerp(info.tint, Color.Black, 0.35f)
+            p.light -> info.tintLight
             else -> info.tint
         }
         Ic(info.icon, 32, tint)
@@ -564,7 +564,7 @@ fun MediaBlock(m: LauncherModel, v: Variant) {
     val frac = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
     when (v) {
         Variant.WIDE -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Art(md.art, 56)
+            Art(md.art, 56, md.title)
             W(14)
             Column(Modifier.weight(1f)) {
                 T(title, 16, p.tx, FontWeight.Medium)
@@ -579,7 +579,7 @@ fun MediaBlock(m: LauncherModel, v: Variant) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Art(md.art, 80)
+            Art(md.art, 80, md.title)
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 T(title, 16, p.tx, FontWeight.Medium, align = TextAlign.Center)
                 H(3)
@@ -590,7 +590,7 @@ fun MediaBlock(m: LauncherModel, v: Variant) {
         }
         Variant.BIG -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Art(md.art, 84)
+                Art(md.art, 84, md.title)
                 W(14)
                 Column(Modifier.weight(1f)) {
                     T(title, 16, p.tx, FontWeight.Medium)
@@ -609,10 +609,16 @@ fun MediaBlock(m: LauncherModel, v: Variant) {
 }
 
 @Composable
-fun Art(bmp: ImageBitmap?, size: Int) {
+fun Art(bmp: ImageBitmap?, size: Int, title: String) {
     val p = LocalPal.current
+    // Sem capa: bloco colorido com a inicial da música (cor fixa por música)
+    val tile = if (title.isEmpty()) p.cd2 else {
+        val list = if (p.light) ACCENTS_LIGHT else ACCENTS
+        val c = list[Math.floorMod(title.hashCode(), list.size)]
+        if (p.night) lerp(c, Color.Black, 0.45f) else c
+    }
     Box(
-        Modifier.size(size.dp).panel(p, 12, p.cd2),
+        Modifier.size(size.dp).panel(p, 12, if (bmp != null) p.cd2 else tile),
         contentAlignment = Alignment.Center
     ) {
         if (bmp != null) {
@@ -623,6 +629,9 @@ fun Art(bmp: ImageBitmap?, size: Int) {
                 contentScale = ContentScale.Crop,
                 colorFilter = if (p.night) ColorFilter.tint(Color(0x59000000), BlendMode.SrcAtop) else null
             )
+        } else if (title.isNotEmpty()) {
+            val initial = title.trim().firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "♪"
+            T(initial, (size * 0.45f).toInt(), Color.White, FontWeight.Medium, align = TextAlign.Center)
         } else {
             Ic(Icons.Rounded.Album, (size * 0.45f).toInt(), p.tx2)
         }

@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.app.NotificationManagerCompat
+import java.util.concurrent.Executors
 
 /** Só existe para o Android liberar o acesso às sessões de mídia (capa e controles). */
 class MediaListener : NotificationListenerService()
@@ -47,6 +48,9 @@ class MediaRepo(private val ctx: Context) {
     private val msm = ctx.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
     private val component = ComponentName(ctx, MediaListener::class.java)
     private val handler = Handler(Looper.getMainLooper())
+    private val fetcher = ArtFetcher(ctx)
+    private val exec = Executors.newSingleThreadExecutor()
+    private var artKey = ""
 
     private val callback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) = read()
@@ -111,6 +115,7 @@ class MediaRepo(private val ctx: Context) {
         val c = controller
         if (c == null) {
             title = ""; artist = ""; source = ""; art = null; playing = false; duration = 0L
+            artKey = ""
             posBase = 0L
             return
         }
@@ -123,7 +128,12 @@ class MediaRepo(private val ctx: Context) {
         val bmp = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: m?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-        art = bmp?.asImageBitmap()
+        if (bmp != null) {
+            art = bmp.asImageBitmap()
+            artKey = ""
+        } else {
+            lookupArt(title, artist)
+        }
         duration = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val s = c.playbackState
         playing = s?.state == PlaybackState.STATE_PLAYING
@@ -135,6 +145,25 @@ class MediaRepo(private val ctx: Context) {
             pm.getApplicationLabel(pm.getApplicationInfo(c.packageName, 0)).toString()
         } catch (e: Exception) {
             c.packageName
+        }
+    }
+
+    /** A fonte não mandou capa: tenta o cache e, se tiver internet, busca pelo nome. */
+    private fun lookupArt(t: String, a: String) {
+        if (t.isEmpty()) {
+            art = null
+            artKey = ""
+            return
+        }
+        val key = fetcher.key(t, a)
+        if (key == artKey) return
+        artKey = key
+        art = null
+        exec.execute {
+            val found = fetcher.fetch(key, t, a)
+            handler.post {
+                if (artKey == key) art = found?.asImageBitmap()
+            }
         }
     }
 

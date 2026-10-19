@@ -15,13 +15,14 @@ val ACCENTS = listOf(
 )
 
 /** Versões escuras das mesmas cores, para ler bem sobre fundo claro sob sol forte. */
+/** Tons vivos da mesma paleta para o tema claro: saturados, mas escuros o bastante para ler no sol. */
 val ACCENTS_LIGHT = listOf(
-    Color(0xFF185FA5),
-    Color(0xFF534AB7),
-    Color(0xFF0F6E56),
-    Color(0xFF854F0B),
-    Color(0xFF993556),
-    Color(0xFF444441)
+    Color(0xFF1A73E8), // azul
+    Color(0xFF6A4FE0), // roxo
+    Color(0xFF0E9F6E), // verde
+    Color(0xFFE07B00), // âmbar
+    Color(0xFFD6336C), // rosa
+    Color(0xFF5B6472)  // neutro
 )
 
 data class Base(val name: String, val bg: Color, val cd: Color, val cd2: Color)
@@ -78,10 +79,10 @@ fun palette(accent: Int, base: Int, night: Boolean, light: Boolean): Pal {
         light -> {
             val ac = ACCENTS_LIGHT[ai]
             Pal(
-                bg = Color(0xFFDCE0E5),
+                bg = Color(0xFFE4E8ED),
                 cd = Color(0xFFFFFFFF),
-                cd2 = Color(0xFFD0D5DC),
-                bd = Color(0xFF8E96A1),
+                cd2 = Color(0xFFDDE2E8),
+                bd = Color(0xFF9AA3AF),
                 ac = ac,
                 on = onFor(ac),
                 tx = Color(0xFF0B0D10),
