@@ -200,6 +200,7 @@ class LauncherModel(val ctx: Context) {
         } catch (e: Exception) {
         }
         readVolume()
+        show("Volume ${'$'}vol")
     }
 
     fun toggleMute() {
