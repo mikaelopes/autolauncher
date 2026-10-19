@@ -21,6 +21,7 @@ sealed class Overlay {
     data class Picker(val target: Int) : Overlay()
     object Config : Overlay()
     object Apps : Overlay()
+    object Colors : Overlay()
 }
 
 class LauncherModel(val ctx: Context) {
@@ -228,15 +229,68 @@ class LauncherModel(val ctx: Context) {
 
     fun closeAll() {
         overlay = null
+        if (screenOff) setScreenOffState(false)
         if (edit) {
             edit = false
             sel = null
         }
     }
 
+    /** Liga 15 min antes do pôr do sol (escurece rápido aqui) e desliga 15 min depois do nascer. */
+    fun nightWindow(): Pair<Long, Long> {
+        val loc = gps.lastLoc ?: gps.lastKnown()
+        val lat = loc?.latitude ?: MapCfg.CENTER.latitude
+        val lon = loc?.longitude ?: MapCfg.CENTER.longitude
+        val (rise, set) = Sun.today(lat, lon, now) ?: run {
+            val c = Calendar.getInstance()
+            c.set(Calendar.HOUR_OF_DAY, 6); c.set(Calendar.MINUTE, 0)
+            val r = c.timeInMillis
+            c.set(Calendar.HOUR_OF_DAY, 18)
+            r to c.timeInMillis
+        }
+        return (set - 15 * 60_000L) to (rise + 15 * 60_000L)
+    }
+
     fun isNight(): Boolean {
-        val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        return nightMode == 2 || (nightMode == 1 && (h >= 18 || h < 6))
+        if (nightMode == 2) return true
+        if (nightMode == 0) return false
+        val (on, off) = nightWindow()
+        return now >= on || now < off
+    }
+
+    /** Carro andando: Ajustes travados (botão vira "apagar tela") */
+    val moving: Boolean get() = gps.hasFix(now) && gps.speedKmh > 10f
+
+    var screenOff by mutableStateOf(false)
+        private set
+
+    fun setScreenOffState(v: Boolean) {
+        screenOff = v
+        if (!Settings.System.canWrite(ctx)) return
+        val cr = ctx.contentResolver
+        try {
+            if (v) {
+                prefs.offSavedBrightness = Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS, 120)
+                prefs.offSavedMode = Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, 0)
+                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, 1)
+            } else if (prefs.offSavedBrightness >= 0) {
+                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, prefs.offSavedBrightness)
+                Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, prefs.offSavedMode)
+                prefs.offSavedBrightness = -1
+            }
+        } catch (e: Exception) {
+        }
+    }
+
+    /** Retoma o último player (tecla de mídia, sem permissão especial) */
+    fun resumeMedia() {
+        try {
+            val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
+        } catch (e: Exception) {
+        }
     }
 
     fun readVolume() {
@@ -347,6 +401,6 @@ class LauncherModel(val ctx: Context) {
     }
 
     companion object {
-        const val NIGHT_BRIGHTNESS = 45
+        const val NIGHT_BRIGHTNESS = 12
     }
 }

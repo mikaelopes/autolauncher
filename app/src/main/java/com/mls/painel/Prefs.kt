@@ -80,6 +80,14 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("bg_motion", true)
         set(v) = p.edit().putBoolean("bg_motion", v).apply()
 
+    var offSavedBrightness: Int
+        get() = p.getInt("off_saved_b", -1)
+        set(v) = p.edit().putInt("off_saved_b", v).apply()
+
+    var offSavedMode: Int
+        get() = p.getInt("off_saved_m", 0)
+        set(v) = p.edit().putInt("off_saved_m", v).apply()
+
     var showMap: Boolean
         get() = p.getBoolean("show_map", false)
         set(v) = p.edit().putBoolean("show_map", v).apply()
