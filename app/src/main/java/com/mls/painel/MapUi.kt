@@ -17,6 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import android.view.ViewGroup
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -56,54 +58,34 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import kotlin.math.roundToInt
 
-/** Mapa offline com a posição do carro e a velocidade no canto. */
-/** Antes do download o mapa não é criado: mostra a velocidade e um convite para baixar. */
-@Composable
-fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
-    if (m.map.state != MapDl.DONE) {
-        MapPlaceholder(m, requestLocation)
-    } else {
-        // O mapa é pesado: deixa a tela inicial aparecer primeiro e só então carrega
-        var ready by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) {
-            kotlinx.coroutines.delay(500)
-            ready = true
-        }
-        if (ready) LiveMap(m, requestLocation) else Skeleton(Modifier.fillMaxSize())
-    }
+/** Estado do mapa, criado uma vez só e reaproveitado quando ele aparece na tela. */
+class MapCtl(val view: MapView) {
+    var map by mutableStateOf<MapLibreMap?>(null)
+    var style by mutableStateOf<Style?>(null)
+    var follow by mutableStateOf(true)
+    var street by mutableStateOf("")
+    /** Estilo carregado e primeiros blocos desenhados: pronto para ir para a tela */
+    var shown by mutableStateOf(false)
 }
 
-@Composable
-private fun MapPlaceholder(m: LauncherModel, requestLocation: () -> Unit) {
-    val p = LocalPal.current
-    Box(Modifier.fillMaxSize().padding(16.dp)) {
-        Box(Modifier.align(Alignment.Center)) { SpeedBlock(m, Variant.BIG, requestLocation) }
-        Box(Modifier.align(Alignment.BottomCenter)) {
-            when (m.map.state) {
-                MapDl.RUNNING -> Chip("Baixando mapa ${(m.map.progress * 100).roundToInt()}%", Icons.Rounded.CloudDownload) {}
-                MapDl.ERROR -> Chip("Erro no download · tentar de novo", Icons.Rounded.CloudDownload, primary = true) { m.downloadMap() }
-                else -> Chip("Baixar mapa de Fortaleza", Icons.Rounded.CloudDownload, primary = true) { m.downloadMap() }
-            }
-        }
-    }
-}
+val LocalMap = staticCompositionLocalOf<MapCtl?> { null }
 
+/**
+ * Motor do mapa: cria, carrega e mantém o mapa (posição, cores, rua) enquanto a opção está ligada.
+ * Ele começa escondido; a tela inicial usa o layout normal até o mapa ficar pronto.
+ */
 @SuppressLint("MissingPermission")
 @Composable
-private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
-    val p = LocalPal.current
+fun rememberMapEngine(m: LauncherModel): MapCtl {
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val mp = p.map
-
-    val mapView = remember {
+    val mp = LocalPal.current.map
+    val ctl = remember {
         m.prefs.mapOpening = true
         MapRepo.init(ctx)
-        MapView(ctx, MapLibreMapOptions.createFromAttributes(ctx).textureMode(true)).also { it.onCreate(null) }
+        MapCtl(MapView(ctx, MapLibreMapOptions.createFromAttributes(ctx).textureMode(true)).also { it.onCreate(null) })
     }
-    var map by remember { mutableStateOf<MapLibreMap?>(null) }
-    var style by remember { mutableStateOf<Style?>(null) }
-    var follow by remember { mutableStateOf(true) }
+    val mapView = ctl.view
 
     DisposableEffect(lifecycle, mapView) {
         val obs = LifecycleEventObserver { _, e ->
@@ -121,6 +103,7 @@ private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
             if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onPause()
             if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) mapView.onStop()
             mapView.onDestroy()
+            m.mapLive = false
         }
     }
 
@@ -134,18 +117,17 @@ private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
             mm.cameraPosition = CameraPosition.Builder().target(MapCfg.CENTER).zoom(12.0).build()
             // Toque no mapa abre o CarPlay (ZLink) para navegar; segurar volta a seguir o carro
             mm.addOnMapClickListener { m.tapSlot(0); true }
-            mm.addOnMapLongClickListener { follow = true; true }
+            mm.addOnMapLongClickListener { ctl.follow = true; true }
             mm.addOnCameraMoveStartedListener { reason ->
-                if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) follow = false
+                if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) ctl.follow = false
             }
-            map = mm
+            ctl.map = mm
         }
     }
 
     // Carrega o estilo uma vez e liga o marcador de posição
-    LaunchedEffect(map) {
-        val mm = map ?: return@LaunchedEffect
-        style = null
+    LaunchedEffect(ctl.map) {
+        val mm = ctl.map ?: return@LaunchedEffect
         mm.setStyle(Style.Builder().fromUri(MapCfg.STYLE)) { st ->
             paintMap(st, mp)
             if (m.gps.hasPermission()) {
@@ -163,44 +145,45 @@ private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
                 } catch (e: Exception) {
                 }
             }
-            style = st
+            ctl.style = st
         }
     }
 
-    // Mapa abriu e desenhou: libera a trava de segurança
-    LaunchedEffect(style) {
-        if (style != null) {
-            kotlinx.coroutines.delay(4000)
+    // Estilo pronto: dá um instante para desenhar as ruas e só então mostra o mapa
+    LaunchedEffect(ctl.style) {
+        if (ctl.style != null) {
+            kotlinx.coroutines.delay(900)
+            ctl.shown = true
+            m.mapLive = true
+            kotlinx.coroutines.delay(3000)
             m.prefs.mapOpening = false
         }
     }
 
     // Repinta quando muda tema, dia/noite ou cor base
-    LaunchedEffect(style, mp) {
-        style?.let { paintMap(it, mp) }
+    LaunchedEffect(ctl.style, mp) {
+        ctl.style?.let { paintMap(it, mp) }
     }
 
     // Segue o carro: aproxima mais devagar, afasta em velocidade, mapa gira com a direção
-    LaunchedEffect(map, style, m.gps.lastFix, follow) {
-        val mm = map ?: return@LaunchedEffect
+    LaunchedEffect(ctl.map, ctl.style, m.gps.lastFix, ctl.follow) {
+        val mm = ctl.map ?: return@LaunchedEffect
         val l = m.gps.lastLoc ?: return@LaunchedEffect
-        if (style != null) {
+        if (ctl.style != null) {
             try {
                 mm.locationComponent.forceLocationUpdate(l)
             } catch (e: Exception) {
             }
         }
-        if (!follow) return@LaunchedEffect
+        if (!ctl.follow) return@LaunchedEffect
         val kmh = m.gps.speedKmh
-        // Mais perto do que antes; afasta um pouco só em velocidade de estrada
         val zoom = when {
             kmh < 25 -> 17.5
             kmh < 60 -> 17.0
             kmh < 90 -> 16.2
             else -> 15.5
         }
-        // Mapa gira com o carro (frente para cima) e o carro fica no terço de baixo,
-        // mostrando mais do caminho à frente
+        // Frente do carro para cima; carro no terço de baixo mostrando o caminho à frente
         val ahead = mapView.height * 0.38
         mm.animateCamera(
             CameraUpdateFactory.newCameraPosition(
@@ -216,48 +199,70 @@ private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
     }
 
     // Nome da rua atual, lido do mapa offline (a cada ~2 s)
-    var street by remember { mutableStateOf("") }
     var lastQuery by remember { mutableStateOf(0L) }
-    LaunchedEffect(style, m.gps.lastFix) {
-        val st = style ?: return@LaunchedEffect
+    LaunchedEffect(ctl.style, m.gps.lastFix) {
+        val st = ctl.style ?: return@LaunchedEffect
         val l = m.gps.lastLoc ?: return@LaunchedEffect
         val now = System.currentTimeMillis()
         if (now - lastQuery < 2000) return@LaunchedEffect
         lastQuery = now
-        nearestStreet(st, l.latitude, l.longitude, m.gps.heading)?.let { street = it }
+        nearestStreet(st, l.latitude, l.longitude, m.gps.heading)?.let { ctl.street = it }
     }
+    return ctl
+}
 
+/** Coloca a view do mapa numa posição da tela (tirando de onde estava antes). */
+@Composable
+fun MapSurface(ctl: MapCtl, modifier: Modifier) {
+    AndroidView(
+        factory = {
+            (ctl.view.parent as? ViewGroup)?.removeView(ctl.view)
+            ctl.view
+        },
+        modifier = modifier
+    )
+}
+
+/** Bloco do mapa na tela inicial (só aparece quando o mapa já está pronto). */
+@Composable
+fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
+    val ctl = LocalMap.current
+    if (m.map.state != MapDl.DONE || ctl == null) {
+        MapPlaceholder(m, requestLocation)
+        return
+    }
+    val p = LocalPal.current
     Box(Modifier.fillMaxSize()) {
-        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+        MapSurface(ctl, Modifier.fillMaxSize())
 
-        // Brilho de carregamento até o estilo do mapa ficar pronto, depois some suavemente
-        val cover by animateFloatAsState(if (style == null) 1f else 0f, tween(400), label = "cover")
-        if (cover > 0.01f) Skeleton(Modifier.fillMaxSize().alpha(cover))
-
-        if (street.isNotEmpty()) {
+        if (ctl.street.isNotEmpty()) {
             Box(
                 Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp, start = 70.dp, end = 70.dp)
                     .panel(p, 12, p.sheet).padding(horizontal = 14.dp, vertical = 7.dp)
             ) {
-                T(street, 15, p.tx, FontWeight.Medium, align = TextAlign.Center)
+                T(ctl.street, 15, p.tx, FontWeight.Medium, align = TextAlign.Center)
             }
         }
 
         SpeedBadge(m, Modifier.align(Alignment.TopStart).padding(10.dp))
 
-        if (!follow) {
+        if (!ctl.follow) {
             Box(Modifier.align(Alignment.BottomEnd).padding(10.dp)) {
-                CircleBtn(Icons.Rounded.MyLocation, 48, p.ac, p.on) { follow = true }
+                CircleBtn(Icons.Rounded.MyLocation, 48, p.ac, p.on) { ctl.follow = true }
             }
         }
+    }
+}
 
-        if (m.map.state != MapDl.DONE) {
-            Box(Modifier.align(Alignment.BottomStart).padding(10.dp)) {
-                Chip(
-                    if (m.map.state == MapDl.RUNNING) "Baixando ${(m.map.progress * 100).roundToInt()}%"
-                    else "Baixar mapa offline",
-                    Icons.Rounded.CloudDownload
-                ) { m.overlay = Overlay.Config }
+@Composable
+private fun MapPlaceholder(m: LauncherModel, requestLocation: () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(16.dp)) {
+        Box(Modifier.align(Alignment.Center)) { SpeedBlock(m, Variant.BIG, requestLocation) }
+        Box(Modifier.align(Alignment.BottomCenter)) {
+            when (m.map.state) {
+                MapDl.RUNNING -> Chip("Baixando mapa ${(m.map.progress * 100).roundToInt()}%", Icons.Rounded.CloudDownload) {}
+                MapDl.ERROR -> Chip("Erro no download · tentar de novo", Icons.Rounded.CloudDownload, primary = true) { m.downloadMap() }
+                else -> Chip("Baixar mapa de Fortaleza", Icons.Rounded.CloudDownload, primary = true) { m.downloadMap() }
             }
         }
     }

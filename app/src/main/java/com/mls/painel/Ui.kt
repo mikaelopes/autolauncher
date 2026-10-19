@@ -171,7 +171,20 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
     val bgT = bgAnim.animateFloat(0f, 1f, infiniteRepeatable(tween(50_000, easing = LinearEasing)), label = "bgT")
     val moving = pal.glass && m.bgMotion
 
+    // Motor do mapa: começa um pouco depois da tela aparecer e roda escondido até ficar pronto
+    var engineOn by remember { mutableStateOf(false) }
+    LaunchedEffect(m.showMap, m.map.state) {
+        if (m.showMap && m.map.state == MapDl.DONE) {
+            delay(600)
+            engineOn = true
+        } else {
+            engineOn = false
+        }
+    }
+
     CompositionLocalProvider(LocalPal provides pal) {
+      val mapCtl = if (engineOn) rememberMapEngine(m) else null
+      CompositionLocalProvider(LocalMap provides mapCtl) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
@@ -213,6 +226,12 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
             val h = constraints.maxHeight / s
             CompositionLocalProvider(LocalDensity provides Density(s, 1f)) {
                 Box(Modifier.size(w.dp, h.dp)) {
+                    // Mapa carregando por trás, quase invisível (precisa ser desenhado para carregar)
+                    if (mapCtl != null && !mapCtl.shown) {
+                        Box(Modifier.padding(start = 196.dp, top = 104.dp).size(420.dp, 270.dp).alpha(0.01f)) {
+                            MapSurface(mapCtl, Modifier.fillMaxSize())
+                        }
+                    }
                     Screen(m, night, requestLocation)
                     m.overlay?.let { OverlayHost(m, it) }
                     if (m.screenOff) ScreenOff(m)
@@ -224,7 +243,8 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
             }
         }
     }
-}
+  }
+    }
 
 @Composable
 fun Screen(m: LauncherModel, night: Boolean, requestLocation: () -> Unit) {
@@ -392,7 +412,8 @@ fun SmallBtn(
 
 @Composable
 fun RightArea(m: LauncherModel, rowH: Dp, gap: Dp, modifier: Modifier, requestLocation: () -> Unit) {
-    val o = m.order.toMutableList()
+    // Mapa ligado mas ainda carregando: usa o layout normal até ele ficar pronto
+    val o = (if (m.showMap && !m.mapLayout) listOf("clock", "speed", "media") else m.order).toMutableList()
     var hide = -1
     if ((!m.showMedia || m.mediaIdle) && !m.edit) {
         if (o[0] == "media") {
@@ -425,7 +446,7 @@ fun RightArea(m: LauncherModel, rowH: Dp, gap: Dp, modifier: Modifier, requestLo
 fun Block(m: LauncherModel, slot: Int, kind: String, v: Variant, modifier: Modifier, requestLocation: () -> Unit) {
     val p = LocalPal.current
     val selected = m.edit && m.sel == slot
-    val isMap = kind == "speed" && m.showMap
+    val isMap = kind == "speed" && m.mapLayout
     // Cada bloco tem a sua cor no tema Blocos; o texto dentro acompanha
     val local = when {
         kind == "clock" -> p.copy(cd = p.clockBg, tx = p.clockFg, tx2 = p.clockMut)

@@ -57,6 +57,12 @@ class LauncherModel(val ctx: Context) {
     var bgMotion by mutableStateOf(prefs.bgMotion)
         private set
 
+    /** Mapa carregado e pronto para aparecer */
+    var mapLive by mutableStateOf(false)
+
+    /** Usa o layout com mapa: mapa pronto, ou ainda não baixado (mostra o convite para baixar) */
+    val mapLayout: Boolean get() = showMap && (map.state != MapDl.DONE || mapLive)
+
     fun updBgMotion(v: Boolean) { bgMotion = v; prefs.bgMotion = v }
     var dimScreen by mutableStateOf(prefs.dimScreen)
         private set
