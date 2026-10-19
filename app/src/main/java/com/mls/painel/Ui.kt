@@ -63,6 +63,9 @@ import androidx.compose.material.icons.rounded.WbCloudy
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeDown
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -572,21 +575,24 @@ fun MediaBlock(m: LauncherModel, v: Variant) {
                 T(artist, 13, p.tx2)
             }
             W(10)
-            Controls(md, 48, 44)
+            Controls(md, 44, 40)
+            W(12)
+            MuteBtn(m, 40)
         }
         Variant.NARROW -> Column(
             Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Art(md.art, 80, md.title)
+            Art(md.art, 64, md.title)
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 T(title, 16, p.tx, FontWeight.Medium, align = TextAlign.Center)
                 H(3)
                 T(artist, 13, p.tx2, align = TextAlign.Center)
             }
             Progress(frac, pos, dur)
-            Controls(md, 48, 40, Modifier.fillMaxWidth(), Arrangement.SpaceBetween)
+            Controls(md, 44, 38, Modifier.fillMaxWidth(), Arrangement.SpaceBetween)
+            VolButtons(m, 38, Modifier.fillMaxWidth())
         }
         Variant.BIG -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -604,6 +610,7 @@ fun MediaBlock(m: LauncherModel, v: Variant) {
             }
             Progress(frac, pos, dur)
             Controls(md, 56, 48, Modifier.fillMaxWidth(), Arrangement.SpaceEvenly)
+            VolumeRow(m)
         }
     }
 }
@@ -674,6 +681,61 @@ fun Controls(
         CircleBtn(if (md.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, play, p.ac, p.on) { md.toggle() }
         CircleBtn(Icons.Rounded.SkipNext, side, p.cd2, p.tx) { md.next() }
     }
+}
+
+/** [−]  ▬▬▬▬▬○──  [+]   toque no ícone de alto-falante para mudo */
+@Composable
+fun VolumeRow(m: LauncherModel) {
+    val compact = false
+    val p = LocalPal.current
+    val frac = if (m.muted) 0f else (m.vol.toFloat() / m.volMax).coerceIn(0f, 1f)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        CircleBtn(Icons.AutoMirrored.Rounded.VolumeDown, if (compact) 36 else 40, p.cd2, p.tx) { m.volume(-1) }
+        W(10)
+        Box(
+            Modifier
+                .size(if (compact) 36.dp else 40.dp)
+                .clip(CircleShape)
+                .background(if (m.muted) p.red else Color.Transparent)
+                .clickable { m.toggleMute() },
+            contentAlignment = Alignment.Center
+        ) {
+            Ic(
+                if (m.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
+                20,
+                if (m.muted) Color.White else p.ac
+            )
+        }
+        W(8)
+        Box(Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(p.cd2)) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(if (m.muted) p.tx2 else p.ac))
+        }
+        if (!compact) {
+            W(8)
+            T(if (m.muted) "Mudo" else m.vol.toString(), 13, p.tx2, modifier = Modifier.width(36.dp), align = TextAlign.End)
+        }
+        W(10)
+        CircleBtn(Icons.AutoMirrored.Rounded.VolumeUp, if (compact) 36 else 40, p.cd2, p.tx) { m.volume(1) }
+    }
+}
+
+@Composable
+fun VolButtons(m: LauncherModel, size: Int, modifier: Modifier = Modifier) {
+    val p = LocalPal.current
+    Row(modifier, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        CircleBtn(Icons.AutoMirrored.Rounded.VolumeDown, size, p.cd2, p.tx) { m.volume(-1) }
+        MuteBtn(m, size)
+        CircleBtn(Icons.AutoMirrored.Rounded.VolumeUp, size, p.cd2, p.tx) { m.volume(1) }
+    }
+}
+
+@Composable
+fun MuteBtn(m: LauncherModel, size: Int) {
+    val p = LocalPal.current
+    CircleBtn(
+        if (m.muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
+        size, if (m.muted) p.red else p.cd2, if (m.muted) Color.White else p.ac
+    ) { m.toggleMute() }
 }
 
 @Composable

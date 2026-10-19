@@ -2,6 +2,7 @@ package com.mls.painel
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -60,6 +61,14 @@ class LauncherModel(val ctx: Context) {
     var now by mutableLongStateOf(System.currentTimeMillis())
     var online by mutableStateOf(false)
     var writeOk by mutableStateOf(false)
+
+    private val audio = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    var vol by mutableStateOf(0)
+        private set
+    var volMax by mutableStateOf(1)
+        private set
+    var muted by mutableStateOf(false)
+        private set
 
     var wTemp by mutableStateOf(prefs.wTemp)
         private set
@@ -170,8 +179,41 @@ class LauncherModel(val ctx: Context) {
         return nightMode == 2 || (nightMode == 1 && (h >= 18 || h < 6))
     }
 
+    fun readVolume() {
+        try {
+            vol = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+            volMax = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+            muted = audio.isStreamMute(AudioManager.STREAM_MUSIC) || vol == 0
+        } catch (e: Exception) {
+        }
+    }
+
+    /** dir: +1 aumenta, -1 diminui. Sem permissão especial. */
+    fun volume(dir: Int) {
+        try {
+            if (muted && dir > 0) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+            audio.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (dir > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                0
+            )
+        } catch (e: Exception) {
+        }
+        readVolume()
+    }
+
+    fun toggleMute() {
+        try {
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0)
+        } catch (e: Exception) {
+        }
+        readVolume()
+        show(if (muted) "Som mudo" else "Som ligado")
+    }
+
     fun tickSystem() {
         now = System.currentTimeMillis()
+        readVolume()
         writeOk = Settings.System.canWrite(ctx)
         online = try {
             val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

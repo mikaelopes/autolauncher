@@ -14,7 +14,6 @@ val ACCENTS = listOf(
     Color(0xFFB4B2A9)  // neutro
 )
 
-/** Versões escuras das mesmas cores, para ler bem sobre fundo claro sob sol forte. */
 /** Tons vivos da mesma paleta para o tema claro: saturados, mas escuros o bastante para ler no sol. */
 val ACCENTS_LIGHT = listOf(
     Color(0xFF1A73E8), // azul
