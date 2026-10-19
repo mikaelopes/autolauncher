@@ -63,7 +63,9 @@ data class Pal(
     val glow: Color = Color.Transparent,
     val shadow: Color = Color.Transparent,
     /** Manchas de cor que passeiam devagar atrás do vidro */
-    val blobs: List<Color> = emptyList()
+    val blobs: List<Color> = emptyList(),
+    /** Fundo sólido dos menus e janelas (nunca transparente) */
+    val sheet: Color = Color.Unspecified
 )
 
 private fun c(hex: Long) = Color(hex)
@@ -85,7 +87,8 @@ private fun glassDay() = Pal(
     night = false, light = true,
     glass = true, cdTop = c(0xD1FFFFFF), cdBottom = c(0x85FFFFFF), edgeTop = c(0xFFFFFFFF), edgeBottom = c(0x66FFFFFF),
     glow = c(0xFFA9C4EE), shadow = c(0x55345A8C),
-    blobs = listOf(c(0xFF6F9BEF), c(0xFF8FD3F0), c(0xFFAE9CF0))
+    blobs = listOf(c(0xFF6F9BEF), c(0xFF8FD3F0), c(0xFFAE9CF0)),
+    sheet = c(0xFFF3F7FD)
 )
 
 private fun glassNight() = Pal(
@@ -101,7 +104,8 @@ private fun glassNight() = Pal(
     night = true, light = false,
     glass = true, cdTop = c(0x2EFFFFFF), cdBottom = c(0x0FFFFFFF), edgeTop = c(0x73FFFFFF), edgeBottom = c(0x14FFFFFF),
     glow = c(0xFF1D3A78), shadow = c(0x99000000),
-    blobs = listOf(c(0xFF2350B0), c(0xFF0F5F7E), c(0xFF3A2A8C))
+    blobs = listOf(c(0xFF2350B0), c(0xFF0F5F7E), c(0xFF3A2A8C)),
+    sheet = c(0xFF15244A)
 )
 
 private fun blocksDay() = Pal(
@@ -210,6 +214,7 @@ fun palette(theme: Int, base: Int, night: Boolean): Pal {
         speedBg = s.of(ref.speedBg), speedFg = s.of(ref.speedFg),
         miniBg = s.of(ref.miniBg), miniFg = s.of(ref.miniFg), miniIcon = s.of(ref.miniIcon),
         glow = s.of(ref.glow), shadow = s.of(ref.shadow), blobs = ref.blobs.map { s.of(it) },
+        sheet = if (ref.sheet == Color.Unspecified) s.of(ref.cd) else s.of(ref.sheet),
         map = MapPal(
             s.of(ref.map.land), s.of(ref.map.water), s.of(ref.map.road), s.of(ref.map.casing),
             s.of(ref.map.main), s.of(ref.map.mainCasing), s.of(ref.map.park), s.of(ref.map.label)

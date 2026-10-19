@@ -791,14 +791,14 @@ fun OverlayHost(m: LauncherModel, o: Overlay) {
     val scrimSrc = remember { MutableInteractionSource() }
     val cardSrc = remember { MutableInteractionSource() }
     fun card(size: Modifier) = size
-        .panel(p, 14)
+        .panel(p, 14, p.sheet)
         .clickable(interactionSource = cardSrc, indication = null) {}
         .padding(16.dp)
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xA6000000))
+            .background(Color(0xCC000000))
             .clickable(interactionSource = scrimSrc, indication = null) { m.overlay = null },
         contentAlignment = Alignment.Center
     ) {
