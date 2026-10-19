@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,3 +32,18 @@ jobs:
         with:
           name: Painel-apk
           path: Painel.apk
+
+      - name: Publicar release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          cp Painel.apk "Painel-${TAG}.apk"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "Painel-${TAG}.apk" --clobber
+          else
+            gh release create "$TAG" "Painel-${TAG}.apk" \
+              --title "Painel ${TAG}" \
+              --notes "Launcher para central multimídia 1280×800. Baixe o Painel-${TAG}.apk abaixo, instale na central e escolha Painel como tela inicial padrão."
+          fi
