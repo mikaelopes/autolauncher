@@ -334,6 +334,7 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                     when {
                         glyph != null -> Ic(glyph, 26, p.iconFg)
                         app != null -> Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(34.dp))
+                        m.apps.isEmpty() && s.pkg.isNotEmpty() -> Skeleton(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)))
                         else -> Ic(Icons.Rounded.Add, 26, p.iconFg)
                     }
                 }
@@ -1325,4 +1326,28 @@ fun ScreenOff(m: LauncherModel) {
     ) {
         T("%02d:%02d".format(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE)), 40, Color(0xFF2A2D33), FontWeight.Medium)
     }
+}
+
+
+/** Bloco "carregando": faixa de luz que passa devagar sobre um fundo neutro do tema. */
+@Composable
+fun Skeleton(modifier: Modifier) {
+    val p = LocalPal.current
+    val anim = rememberInfiniteTransition(label = "sk")
+    val x = anim.animateFloat(-1f, 2f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "skx")
+    val base = lerp(p.cd2, p.bg, 0.3f).copy(alpha = 1f)
+    val shine = lerp(base, p.tx, 0.12f)
+    Box(
+        modifier.drawBehind {
+            drawRect(base)
+            val w = size.width
+            drawRect(
+                Brush.linearGradient(
+                    listOf(Color.Transparent, shine, Color.Transparent),
+                    start = Offset(w * x.value - w * 0.4f, 0f),
+                    end = Offset(w * x.value + w * 0.4f, size.height)
+                )
+            )
+        }
+    )
 }

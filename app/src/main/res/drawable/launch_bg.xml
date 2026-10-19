@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aparece na hora, antes do app carregar: o desenho dos blocos esticado na tela -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_bg" />
+    <item>
+        <bitmap android:gravity="fill" android:src="@drawable/skeleton" android:filter="true" />
+    </item>
+</layer-list>

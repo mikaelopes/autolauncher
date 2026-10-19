@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -62,7 +63,13 @@ fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
     if (m.map.state != MapDl.DONE) {
         MapPlaceholder(m, requestLocation)
     } else {
-        LiveMap(m, requestLocation)
+        // O mapa é pesado: deixa a tela inicial aparecer primeiro e só então carrega
+        var ready by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(500)
+            ready = true
+        }
+        if (ready) LiveMap(m, requestLocation) else Skeleton(Modifier.fillMaxSize())
     }
 }
 
@@ -222,6 +229,10 @@ private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+
+        // Brilho de carregamento até o estilo do mapa ficar pronto, depois some suavemente
+        val cover by animateFloatAsState(if (style == null) 1f else 0f, tween(400), label = "cover")
+        if (cover > 0.01f) Skeleton(Modifier.fillMaxSize().alpha(cover))
 
         if (street.isNotEmpty()) {
             Box(
