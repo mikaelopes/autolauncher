@@ -21,7 +21,7 @@ object MapCfg {
     // OpenFreeMap: grátis, sem chave. Download offline permitido até 3.000 tiles / 50 MB.
     // Um estilo neutro só; as cores são repintadas em tempo real conforme tema e cor base
     const val STYLE = "https://tiles.openfreemap.org/styles/positron"
-    const val USER_AGENT = "PainelLauncher/1.6 (+https://github.com/mikaelopes/autolauncher)"
+    const val USER_AGENT = "PainelLauncher/1.9 (+https://github.com/mikaelopes/autolauncher)"
 
     // Fortaleza-CE (cidade inteira + bordas de Caucaia, Maracanaú e Eusébio)
     const val NORTH = -3.68
