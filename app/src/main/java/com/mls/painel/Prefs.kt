@@ -76,6 +76,10 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("map_opening", false)
         set(v) = p.edit().putBoolean("map_opening", v).commit().let { }
 
+    var bgMotion: Boolean
+        get() = p.getBoolean("bg_motion", true)
+        set(v) = p.edit().putBoolean("bg_motion", v).apply()
+
     var showMap: Boolean
         get() = p.getBoolean("show_map", false)
         set(v) = p.edit().putBoolean("show_map", v).apply()

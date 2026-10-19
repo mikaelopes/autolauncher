@@ -1,6 +1,13 @@
 package com.mls.painel
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -158,6 +165,11 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
 
     val pal = remember(m.theme, m.baseColor, night) { palette(m.theme, m.baseColor, night) }
 
+    // Fundo do Vidro: três manchas de cor dando uma volta a cada ~50 s (só redesenha o fundo)
+    val bgAnim = rememberInfiniteTransition(label = "bg")
+    val bgT = bgAnim.animateFloat(0f, 1f, infiniteRepeatable(tween(50_000, easing = LinearEasing)), label = "bgT")
+    val moving = pal.glass && m.bgMotion
+
     CompositionLocalProvider(LocalPal provides pal) {
         BoxWithConstraints(
             Modifier
@@ -165,6 +177,25 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
                 .background(Brush.verticalGradient(listOf(pal.bg, pal.bg2)))
                 .drawBehind {
                     // Vidro: brilho suave vindo de cima, sem manchas fortes atrás do texto
+                    if (pal.glass && pal.blobs.size >= 3) {
+                        val a = (if (moving) bgT.value else 0.15f) * 2f * PI.toFloat()
+                        val w = size.width
+                        val h = size.height
+                        val spots = listOf(
+                            Offset(w * (0.22f + 0.14f * sin(a)), h * (0.25f + 0.18f * cos(a))),
+                            Offset(w * (0.78f + 0.12f * cos(a + 1.3f)), h * (0.35f + 0.22f * sin(a + 1.3f))),
+                            Offset(w * (0.50f + 0.25f * sin(a + 2.6f)), h * (0.92f + 0.12f * cos(a + 2.6f)))
+                        )
+                        spots.forEachIndexed { i, c ->
+                            drawRect(
+                                Brush.radialGradient(
+                                    listOf(pal.blobs[i].copy(alpha = 0.75f), Color.Transparent),
+                                    center = c,
+                                    radius = w * 0.5f
+                                )
+                            )
+                        }
+                    }
                     if (pal.glass) {
                         drawRect(
                             Brush.radialGradient(
@@ -903,6 +934,11 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
             }
             SetRow("Tema") {
                 Seg(listOf("Vidro", "Blocos"), m.theme) { m.updTheme(it) }
+            }
+            if (m.theme == THEME_GLASS) {
+                SetRow("Fundo em movimento") {
+                    Seg(listOf("Não", "Sim"), if (m.bgMotion) 1 else 0) { m.updBgMotion(it == 1) }
+                }
             }
             BaseColorPicker(m)
             SetRow("Mapa na tela inicial") {

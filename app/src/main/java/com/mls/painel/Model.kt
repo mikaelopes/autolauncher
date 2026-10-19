@@ -53,6 +53,10 @@ class LauncherModel(val ctx: Context) {
         private set
     var showMap by mutableStateOf(prefs.showMap)
         private set
+    var bgMotion by mutableStateOf(prefs.bgMotion)
+        private set
+
+    fun updBgMotion(v: Boolean) { bgMotion = v; prefs.bgMotion = v }
     var dimScreen by mutableStateOf(prefs.dimScreen)
         private set
     var alertKmh by mutableStateOf(prefs.alertKmh)
