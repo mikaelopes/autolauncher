@@ -37,6 +37,16 @@ import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.BackgroundLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.sources.VectorSource
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.MultiLineString
+import org.maplibre.geojson.Point
+import androidx.compose.ui.text.style.TextAlign
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sqrt
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
@@ -195,8 +205,29 @@ private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
         )
     }
 
+    // Nome da rua atual, lido do mapa offline (a cada ~2 s)
+    var street by remember { mutableStateOf("") }
+    var lastQuery by remember { mutableStateOf(0L) }
+    LaunchedEffect(style, m.gps.lastFix) {
+        val st = style ?: return@LaunchedEffect
+        val l = m.gps.lastLoc ?: return@LaunchedEffect
+        val now = System.currentTimeMillis()
+        if (now - lastQuery < 2000) return@LaunchedEffect
+        lastQuery = now
+        nearestStreet(st, l.latitude, l.longitude, m.gps.heading)?.let { street = it }
+    }
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+
+        if (street.isNotEmpty()) {
+            Box(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp, start = 70.dp, end = 70.dp)
+                    .panel(p, 12, p.sheet).padding(horizontal = 14.dp, vertical = 7.dp)
+            ) {
+                T(street, 15, p.tx, FontWeight.Medium, align = TextAlign.Center)
+            }
+        }
 
         SpeedBadge(m, Modifier.align(Alignment.TopStart).padding(10.dp))
 
@@ -225,12 +256,12 @@ fun SpeedBadge(m: LauncherModel, modifier: Modifier) {
     val sp by animateFloatAsState(if (fix) m.gps.speedKmh else 0f, tween(450), label = "badge")
     val over = m.alertKmh > 0 && sp > m.alertKmh
     Row(
-        modifier.panel(p, 12, if (over) p.red else p.speedBg).padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier.panel(p, 12, if (over) p.red else if (p.glass) p.sheet else p.speedBg).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        T(if (fix) sp.roundToInt().toString() else "--", 30, if (over) androidx.compose.ui.graphics.Color.White else p.speedFg, FontWeight.Medium)
+        T(if (fix) sp.roundToInt().toString() else "--", 30, if (over) androidx.compose.ui.graphics.Color.White else if (p.glass) p.tx else p.speedFg, FontWeight.Medium)
         W(4)
-        T("km/h", 12, if (over) androidx.compose.ui.graphics.Color.White else p.speedFg.copy(alpha = 0.75f), modifier = Modifier.padding(bottom = 5.dp))
+        T("km/h", 12, if (over) androidx.compose.ui.graphics.Color.White else if (p.glass) p.tx2 else p.speedFg.copy(alpha = 0.75f), modifier = Modifier.padding(bottom = 5.dp))
     }
 }
 
@@ -245,16 +276,20 @@ fun paintMap(st: Style, mp: MapPal) {
         try {
             when (layer) {
                 is BackgroundLayer -> layer.setProperties(PropertyFactory.backgroundColor(mp.land.toArgb()))
-                is FillLayer -> layer.setProperties(
-                    PropertyFactory.fillColor(
-                        when {
-                            "water" in id -> mp.water.toArgb()
-                            "park" in id || "wood" in id || "grass" in id || "landcover" in id -> mp.park.toArgb()
-                            "building" in id -> building
-                            else -> mp.land.toArgb()
-                        }
+                is FillLayer -> {
+                    val col = when {
+                        "water" in id -> mp.water.toArgb()
+                        "park" in id || "wood" in id || "grass" in id || "landcover" in id -> mp.park.toArgb()
+                        "building" in id -> building
+                        else -> mp.land.toArgb()
+                    }
+                    layer.setProperties(
+                        PropertyFactory.fillColor(col),
+                        PropertyFactory.fillOutlineColor(col),
+                        // Prédios poluem o mapa no carro: escondidos
+                        PropertyFactory.visibility(if ("building" in id) Property.NONE else Property.VISIBLE)
                     )
-                )
+                }
                 is LineLayer -> when {
                     "waterway" in id || "water" in id -> layer.setProperties(PropertyFactory.lineColor(mp.water.toArgb()))
                     "boundary" in id || "admin" in id -> layer.setProperties(PropertyFactory.lineColor(mp.casing.toArgb()))
@@ -275,4 +310,58 @@ fun paintMap(st: Style, mp: MapPal) {
         } catch (e: Exception) {
         }
     }
+}
+
+
+/**
+ * Rua mais próxima do carro (até ~30 m), procurando nos nomes de vias do mapa baixado.
+ * Entre ruas quase à mesma distância, prefere a que segue a direção do carro.
+ */
+fun nearestStreet(st: Style, lat: Double, lon: Double, heading: Float): String? {
+    val src = st.getSourceAs<VectorSource>("openmaptiles") ?: return null
+    val feats = try {
+        src.querySourceFeatures(arrayOf("transportation_name"), null)
+    } catch (e: Exception) {
+        return null
+    }
+    val kx = cos(Math.toRadians(lat)) * 111_320.0
+    val ky = 110_540.0
+    var best: String? = null
+    var bestScore = Double.MAX_VALUE
+    for (f in feats) {
+        val name = (f.getStringProperty("name:pt") ?: f.getStringProperty("name") ?: f.getStringProperty("name:latin"))
+            ?.takeIf { it.isNotBlank() } ?: continue
+        val lines: List<List<Point>> = when (val g = f.geometry()) {
+            is LineString -> listOf(g.coordinates())
+            is MultiLineString -> g.coordinates()
+            else -> continue
+        }
+        for (pts in lines) {
+            for (i in 0 until pts.size - 1) {
+                val ax = (pts[i].longitude() - lon) * kx
+                val ay = (pts[i].latitude() - lat) * ky
+                val bx = (pts[i + 1].longitude() - lon) * kx
+                val by = (pts[i + 1].latitude() - lat) * ky
+                val dx = bx - ax
+                val dy = by - ay
+                val len2 = dx * dx + dy * dy
+                if (len2 < 0.01) continue
+                val t = (-(ax * dx + ay * dy) / len2).coerceIn(0.0, 1.0)
+                val px = ax + t * dx
+                val py = ay + t * dy
+                val d = sqrt(px * px + py * py)
+                if (d > 30) continue
+                // Ângulo do trecho vs. direção do carro (0 = mesma direção, sentido não importa)
+                val segDeg = Math.toDegrees(atan2(dx, dy))
+                var diff = abs(((segDeg - heading) % 180 + 180) % 180)
+                if (diff > 90) diff = 180 - diff
+                val score = d + diff * 0.15
+                if (score < bestScore) {
+                    bestScore = score
+                    best = name
+                }
+            }
+        }
+    }
+    return best
 }
