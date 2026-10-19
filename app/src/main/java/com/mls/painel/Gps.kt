@@ -17,12 +17,22 @@ import androidx.core.content.ContextCompat
 
 /** Velocidade direto do GPS da central. Não usa internet nem Google Play Services. */
 class GpsRepo(private val ctx: Context) : LocationListener {
+    private val hp = ctx.getSharedPreferences("gps", Context.MODE_PRIVATE)
+    private var prefsHeading: Float
+        get() = hp.getFloat("heading", 0f)
+        set(v) = hp.edit().putFloat("heading", v).apply()
+
     var speedKmh by mutableFloatStateOf(0f)
         private set
     var lastFix by mutableLongStateOf(0L)
         private set
     var lastLoc: Location? = null
         private set
+
+    /** Direção do carro em graus (0 = norte). Fica guardada quando o carro para. */
+    var heading by mutableFloatStateOf(prefsHeading)
+        private set
+    private var headingAnchor: Location? = null
 
     private var running = false
     private val lm = ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -75,6 +85,20 @@ class GpsRepo(private val ctx: Context) : LocationListener {
         }
         if (s < 2f) s = 0f
         speedKmh = s
+        // Direção: usa a do GPS em movimento; senão calcula pelo deslocamento (mín. 8 m)
+        val anchor = headingAnchor
+        when {
+            location.hasBearing() && s > 6f -> {
+                heading = location.bearing
+                headingAnchor = location
+            }
+            anchor == null -> headingAnchor = location
+            anchor.distanceTo(location) > 8f -> {
+                heading = anchor.bearingTo(location).let { if (it < 0) it + 360f else it }
+                headingAnchor = location
+            }
+        }
+        prefsHeading = heading
         lastFix = System.currentTimeMillis()
         lastLoc = location
     }

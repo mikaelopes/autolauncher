@@ -172,15 +172,24 @@ private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
         }
         if (!follow) return@LaunchedEffect
         val kmh = m.gps.speedKmh
+        // Mais perto do que antes; afasta um pouco só em velocidade de estrada
         val zoom = when {
-            kmh < 30 -> 16.0
-            kmh < 70 -> 15.0
-            else -> 14.0
+            kmh < 25 -> 17.5
+            kmh < 60 -> 17.0
+            kmh < 90 -> 16.2
+            else -> 15.5
         }
-        val bearing = if (l.hasBearing() && kmh > 8) l.bearing.toDouble() else mm.cameraPosition.bearing
+        // Mapa gira com o carro (frente para cima) e o carro fica no terço de baixo,
+        // mostrando mais do caminho à frente
+        val ahead = mapView.height * 0.38
         mm.animateCamera(
             CameraUpdateFactory.newCameraPosition(
-                CameraPosition.Builder().target(LatLng(l.latitude, l.longitude)).zoom(zoom).bearing(bearing).build()
+                CameraPosition.Builder()
+                    .target(LatLng(l.latitude, l.longitude))
+                    .zoom(zoom)
+                    .bearing(m.gps.heading.toDouble())
+                    .padding(0.0, ahead, 0.0, 0.0)
+                    .build()
             ),
             900
         )
