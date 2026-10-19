@@ -3,6 +3,8 @@ name: Gerar APK
 on:
   push:
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: write
