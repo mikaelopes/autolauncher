@@ -954,7 +954,7 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                 Ic(Icons.Rounded.WbSunny, 18, p.tx2)
                 W(8)
                 Box(Modifier.weight(1f)) {
-                    ChannelSlider("", m.brightness, Color(0xFF15171A), Color(0xFFFFFFFF), { m.setBrightness(it) }) {}
+                    ChannelSlider("", m.brightness, Color(0xFF15171A), Color(0xFFFFFFFF), { m.changeBrightness(it) }) {}
                 }
                 W(4)
                 Ic(Icons.Rounded.WbSunny, 26, p.ac)

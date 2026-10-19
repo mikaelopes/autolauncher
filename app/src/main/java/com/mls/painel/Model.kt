@@ -294,7 +294,7 @@ class LauncherModel(val ctx: Context) {
         }
     }
 
-    fun setBrightness(v: Int) {
+    fun changeBrightness(v: Int) {
         val b = v.coerceIn(3, 255)
         brightness = b
         if (!Settings.System.canWrite(ctx)) return
