@@ -33,8 +33,9 @@ jobs:
       - name: Conferir assinatura
         run: |
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
-          $BT/apksigner verify --print-certs Painel.apk | grep -E "SHA-256|DN"
-          $BT/aapt dump badging Painel.apk | grep -o "versionCode='[0-9]*' versionName='[^']*'"
+          SHA=$($BT/apksigner verify --print-certs Painel.apk | grep "SHA-256" | head -1 | awk '{print $NF}')
+          VER=$($BT/aapt dump badging Painel.apk | grep -o "versionCode='[0-9]*' versionName='[^']*'")
+          echo "::notice title=Assinatura::$VER cert=$SHA"
 
       - uses: actions/upload-artifact@v4
         with:
