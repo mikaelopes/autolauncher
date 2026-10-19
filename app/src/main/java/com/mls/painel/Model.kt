@@ -326,8 +326,16 @@ class LauncherModel(val ctx: Context) {
         show(if (muted) "Som mudo" else "Som ligado")
     }
 
+    /** Nada tocando há alguns segundos: o card de mídia some e o outro bloco ocupa o espaço */
+    var mediaIdle by mutableStateOf(false)
+        private set
+    private var lastPlaying = 0L
+
     fun tickSystem() {
         now = System.currentTimeMillis()
+        // Sem permissão o card continua (é por ele que se libera o acesso)
+        if (!media.hasAccess || media.title.isNotEmpty()) lastPlaying = now
+        mediaIdle = now - lastPlaying > 4000
         readVolume()
         writeOk = Settings.System.canWrite(ctx)
         online = try {

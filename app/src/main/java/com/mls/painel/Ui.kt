@@ -393,7 +393,7 @@ fun SmallBtn(
 fun RightArea(m: LauncherModel, rowH: Dp, gap: Dp, modifier: Modifier, requestLocation: () -> Unit) {
     val o = m.order.toMutableList()
     var hide = -1
-    if (!m.showMedia && !m.edit) {
+    if ((!m.showMedia || m.mediaIdle) && !m.edit) {
         if (o[0] == "media") {
             o[0] = o[2]
             o[2] = "media"
