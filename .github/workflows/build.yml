@@ -43,16 +43,19 @@ jobs:
           path: Painel.apk
 
       - name: Publicar release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          cp Painel.apk "Painel-${TAG}.apk"
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          VN=$($BT/aapt dump badging Painel.apk | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          TAG="v$VN"
+          cp Painel.apk "Painel-$TAG.apk"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "Painel-${TAG}.apk" --clobber
+            gh release upload "$TAG" Painel.apk "Painel-$TAG.apk" --clobber
           else
-            gh release create "$TAG" "Painel-${TAG}.apk" \
-              --title "Painel ${TAG}" \
-              --notes "Launcher para central multimídia 1280×800. Baixe o Painel-${TAG}.apk abaixo, instale na central e escolha Painel como tela inicial padrão."
+            gh release create "$TAG" Painel.apk "Painel-$TAG.apk" \
+              --target "$GITHUB_SHA" --latest \
+              --title "Painel $TAG" \
+              --notes "Baixe direto na central: https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/Painel.apk"
           fi
