@@ -46,15 +46,41 @@ import androidx.compose.ui.graphics.toArgb
 import kotlin.math.roundToInt
 
 /** Mapa offline com a posição do carro e a velocidade no canto. */
-@SuppressLint("MissingPermission")
+/** Antes do download o mapa não é criado: mostra a velocidade e um convite para baixar. */
 @Composable
 fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
+    if (m.map.state != MapDl.DONE) {
+        MapPlaceholder(m, requestLocation)
+    } else {
+        LiveMap(m, requestLocation)
+    }
+}
+
+@Composable
+private fun MapPlaceholder(m: LauncherModel, requestLocation: () -> Unit) {
+    val p = LocalPal.current
+    Box(Modifier.fillMaxSize().padding(16.dp)) {
+        Box(Modifier.align(Alignment.Center)) { SpeedBlock(m, Variant.BIG, requestLocation) }
+        Box(Modifier.align(Alignment.BottomCenter)) {
+            when (m.map.state) {
+                MapDl.RUNNING -> Chip("Baixando mapa ${(m.map.progress * 100).roundToInt()}%", Icons.Rounded.CloudDownload) {}
+                MapDl.ERROR -> Chip("Erro no download · tentar de novo", Icons.Rounded.CloudDownload, primary = true) { m.downloadMap() }
+                else -> Chip("Baixar mapa de Fortaleza", Icons.Rounded.CloudDownload, primary = true) { m.downloadMap() }
+            }
+        }
+    }
+}
+
+@SuppressLint("MissingPermission")
+@Composable
+private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
     val p = LocalPal.current
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val mp = p.map
 
     val mapView = remember {
+        m.prefs.mapOpening = true
         MapRepo.init(ctx)
         MapView(ctx, MapLibreMapOptions.createFromAttributes(ctx).textureMode(true)).also { it.onCreate(null) }
     }
@@ -118,6 +144,14 @@ fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
                 }
             }
             style = st
+        }
+    }
+
+    // Mapa abriu e desenhou: libera a trava de segurança
+    LaunchedEffect(style) {
+        if (style != null) {
+            kotlinx.coroutines.delay(4000)
+            m.prefs.mapOpening = false
         }
     }
 

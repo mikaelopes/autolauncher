@@ -58,6 +58,37 @@ class LauncherModel(val ctx: Context) {
     var alertKmh by mutableStateOf(prefs.alertKmh)
         private set
 
+    /** Texto do último fechamento inesperado, se houver */
+    var crash by mutableStateOf(CrashInfo.collect(ctx, prefs))
+
+    init {
+        // Launcher não pode ficar em loop: se fechou com o mapa ligado, desliga o mapa
+        if (crash != null && prefs.showMap) {
+            updMap(false)
+            crash = "Desliguei o mapa para o Painel não travar.\n\n" + crash
+        }
+        prefs.mapOpening = false
+    }
+
+    fun dismissCrash() {
+        try {
+            java.io.File(ctx.filesDir, PainelApp.CRASH_FILE).delete()
+        } catch (e: Exception) {
+        }
+        crash = null
+    }
+
+    fun copyCrash() {
+        val txt = crash ?: return
+        try {
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("Erro do Painel", txt))
+            show("Erro copiado")
+        } catch (e: Exception) {
+            show("Não deu para copiar")
+        }
+    }
+
     var edit by mutableStateOf(false)
     var sel by mutableStateOf<Int?>(null)
     var overlay by mutableStateOf<Overlay?>(null)

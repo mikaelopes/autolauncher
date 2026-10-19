@@ -53,7 +53,15 @@ data class Pal(
     val miniIcon: Color,
     val map: MapPal,
     val night: Boolean,
-    val light: Boolean
+    val light: Boolean,
+    // Vidro: cards com degradê, borda com reflexo e brilho no fundo
+    val glass: Boolean = false,
+    val cdTop: Color = Color.Transparent,
+    val cdBottom: Color = Color.Transparent,
+    val edgeTop: Color = Color.Transparent,
+    val edgeBottom: Color = Color.Transparent,
+    val glow: Color = Color.Transparent,
+    val shadow: Color = Color.Transparent
 )
 
 private fun c(hex: Long) = Color(hex)
@@ -72,7 +80,9 @@ private fun glassDay() = Pal(
     speedBg = c(0xD9FFFFFF), speedFg = c(0xFF0B1220),
     miniBg = c(0xD9FFFFFF), miniFg = c(0xFF33415A), miniIcon = c(0xFF1D4ED8),
     map = MapPal(c(0xFFEEF2F7), c(0xFFB9D0EA), c(0xFFFFFFFF), c(0xFFD2DBE6), c(0xFFFFFFFF), c(0xFF9FB2CC), c(0xFFDFE8E2), c(0xFF5A6B85)),
-    night = false, light = true
+    night = false, light = true,
+    glass = true, cdTop = c(0xE6FFFFFF), cdBottom = c(0x9EFFFFFF), edgeTop = c(0xFFFFFFFF), edgeBottom = c(0x66FFFFFF),
+    glow = c(0xFFA9C4EE), shadow = c(0x55345A8C)
 )
 
 private fun glassNight() = Pal(
@@ -85,7 +95,9 @@ private fun glassNight() = Pal(
     speedBg = c(0x1DFFFFFF), speedFg = Color.White,
     miniBg = c(0x1DFFFFFF), miniFg = c(0xC2FFFFFF), miniIcon = c(0xFF9DB8F5),
     map = MapPal(c(0xFF111D3B), c(0xFF0A1430), c(0xFF1F2F55), c(0xFF172446), c(0xFF34508A), c(0xFF253A66), c(0xFF13253B), c(0xFF8EA3C8)),
-    night = true, light = false
+    night = true, light = false,
+    glass = true, cdTop = c(0x2EFFFFFF), cdBottom = c(0x0FFFFFFF), edgeTop = c(0x73FFFFFF), edgeBottom = c(0x14FFFFFF),
+    glow = c(0xFF1D3A78), shadow = c(0x99000000)
 )
 
 private fun blocksDay() = Pal(
@@ -193,6 +205,7 @@ fun palette(theme: Int, base: Int, night: Boolean): Pal {
         clockBg = s.of(ref.clockBg), clockFg = s.of(ref.clockFg), clockMut = s.of(ref.clockMut),
         speedBg = s.of(ref.speedBg), speedFg = s.of(ref.speedFg),
         miniBg = s.of(ref.miniBg), miniFg = s.of(ref.miniFg), miniIcon = s.of(ref.miniIcon),
+        glow = s.of(ref.glow), shadow = s.of(ref.shadow),
         map = MapPal(
             s.of(ref.map.land), s.of(ref.map.water), s.of(ref.map.road), s.of(ref.map.casing),
             s.of(ref.map.main), s.of(ref.map.mainCasing), s.of(ref.map.park), s.of(ref.map.label)

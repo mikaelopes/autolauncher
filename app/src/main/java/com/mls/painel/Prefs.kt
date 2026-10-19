@@ -67,6 +67,15 @@ class Prefs(ctx: Context) {
         get() = p.getInt("base_color", DEFAULT_BASE)
         set(v) = p.edit().putInt("base_color", v).apply()
 
+    var lastExitSeen: Long
+        get() = p.getLong("last_exit_seen", 0L)
+        set(v) = p.edit().putLong("last_exit_seen", v).apply()
+
+    /** true enquanto o mapa está sendo criado; se o app morrer nesse meio, o mapa é desligado */
+    var mapOpening: Boolean
+        get() = p.getBoolean("map_opening", false)
+        set(v) = p.edit().putBoolean("map_opening", v).commit().let { }
+
     var showMap: Boolean
         get() = p.getBoolean("show_map", false)
         set(v) = p.edit().putBoolean("show_map", v).apply()

@@ -77,6 +77,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -158,7 +159,23 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
     val pal = remember(m.theme, m.baseColor, night) { palette(m.theme, m.baseColor, night) }
 
     CompositionLocalProvider(LocalPal provides pal) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(pal.bg, pal.bg2)))) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(pal.bg, pal.bg2)))
+                .drawBehind {
+                    // Vidro: brilho suave vindo de cima, sem manchas fortes atrás do texto
+                    if (pal.glass) {
+                        drawRect(
+                            Brush.radialGradient(
+                                listOf(pal.glow.copy(alpha = 0.85f), Color.Transparent),
+                                center = Offset(size.width * 0.3f, 0f),
+                                radius = size.width * 0.75f
+                            )
+                        )
+                    }
+                }
+        ) {
             val s = minOf(constraints.maxWidth / DESIGN_W, constraints.maxHeight / DESIGN_H)
             val w = constraints.maxWidth / s
             val h = constraints.maxHeight / s
@@ -166,6 +183,7 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
                 Box(Modifier.size(w.dp, h.dp)) {
                     Screen(m, night, requestLocation)
                     m.overlay?.let { OverlayHost(m, it) }
+                    m.crash?.let { CrashPanel(m, it) }
                     m.toast?.let {
                         ToastPill(it, Modifier.align(Alignment.TopCenter).padding(top = 36.dp))
                     }
@@ -955,7 +973,7 @@ fun Seg(opts: List<String>, selected: Int, onSelect: (Int) -> Unit) {
         opts.forEachIndexed { i, o ->
             Box(
                 Modifier
-                    .clip(RoundedCornerShape(7.dp))
+                    .clip(RoundedCornerShape((7 + p.round).dp))
                     .background(if (i == selected) p.ac else Color.Transparent)
                     .clickable { onSelect(i) }
                     .padding(horizontal = 10.dp, vertical = 6.dp)
@@ -1048,6 +1066,14 @@ fun H(n: Int) = Spacer(Modifier.height(n.dp))
 /** Fundo + borda visível: no sol forte a borda é o que separa um botão do outro. */
 fun Modifier.panel(p: Pal, radius: Int, bg: Color = p.cd, border: Boolean = true): Modifier {
     val shape = RoundedCornerShape((radius + p.round).dp)
+    if (p.glass && bg == p.cd) {
+        // Vidro: sombra, degradê de cima para baixo e borda que reflete a luz no topo
+        val lifted = if (radius >= 14) this.shadow(8.dp, shape, ambientColor = p.shadow, spotColor = p.shadow) else this
+        return lifted
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(p.cdTop, p.cdBottom)))
+            .border(1.dp, Brush.verticalGradient(listOf(p.edgeTop, p.edgeBottom)), shape)
+    }
     val m = this.clip(shape).background(bg)
     return if (border && bg.alpha > 0f && p.bd.alpha > 0f) m.border(1.dp, p.bd, shape) else m
 }
@@ -1124,5 +1150,39 @@ fun ChannelSlider(label: String, value: Int, from: Color, to: Color, onChange: (
             )
         }
         T(value.toString(), 12, p.tx2, align = TextAlign.End, modifier = Modifier.width(34.dp))
+    }
+}
+
+
+@Composable
+fun CrashPanel(m: LauncherModel, text: String) {
+    val p = LocalPal.current
+    Box(
+        Modifier.fillMaxSize().background(Color(0xB3000000)).clickable(
+            interactionSource = remember { MutableInteractionSource() }, indication = null
+        ) {},
+        contentAlignment = Alignment.Center
+    ) {
+        Column(Modifier.width(520.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF15181D)).padding(16.dp)) {
+            T("O Painel fechou da última vez", 16, Color.White, FontWeight.Medium)
+            H(4)
+            T("Copie o erro e mande no chat para eu corrigir.", 12, Color(0xFFB7BEC8))
+            H(10)
+            Box(
+                Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF0B0D10))
+                    .verticalScroll(rememberScrollState()).padding(8.dp)
+            ) {
+                BasicText(
+                    text,
+                    style = TextStyle(color = Color(0xFFE6E9EE), fontSize = 9.sp, lineHeight = 11.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                )
+            }
+            H(12)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip("Copiar erro", primary = true) { m.copyCrash() }
+                Chip("Fechar") { m.dismissCrash() }
+            }
+        }
     }
 }
