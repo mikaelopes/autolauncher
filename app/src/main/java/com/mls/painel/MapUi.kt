@@ -125,6 +125,9 @@ private fun LiveMap(m: LauncherModel, requestLocation: () -> Unit) {
             mm.uiSettings.isTiltGesturesEnabled = false
             mm.uiSettings.isAttributionEnabled = true
             mm.cameraPosition = CameraPosition.Builder().target(MapCfg.CENTER).zoom(12.0).build()
+            // Toque no mapa abre o CarPlay (ZLink) para navegar; segurar volta a seguir o carro
+            mm.addOnMapClickListener { m.tapSlot(0); true }
+            mm.addOnMapLongClickListener { follow = true; true }
             mm.addOnCameraMoveStartedListener { reason ->
                 if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) follow = false
             }

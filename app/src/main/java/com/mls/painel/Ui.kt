@@ -214,6 +214,7 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
                 Box(Modifier.size(w.dp, h.dp)) {
                     Screen(m, night, requestLocation)
                     m.overlay?.let { OverlayHost(m, it) }
+                    if (m.screenOff) ScreenOff(m)
                     m.crash?.let { CrashPanel(m, it) }
                     m.toast?.let {
                         ToastPill(it, Modifier.align(Alignment.TopCenter).padding(top = 36.dp))
@@ -227,9 +228,10 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
 @Composable
 fun Screen(m: LauncherModel, night: Boolean, requestLocation: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        StatusBar(m, night)
+        // A central já mostra relógio e status no topo; a barra do Painel só aparece no modo de edição
+        if (m.edit) StatusBar(m, night)
         BoxWithConstraints(
-            Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, bottom = 12.dp, top = 4.dp)
+            Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, bottom = 12.dp, top = if (m.edit) 4.dp else 12.dp)
         ) {
             val gap = 12.dp
             // 4 linhas iguais: as divisões dos atalhos coincidem com as dos blocos da direita
@@ -343,7 +345,17 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 m.overlay = Overlay.Picker(3)
             }) { m.tapEq() }
-            SmallBtn("Ajustes", Icons.Rounded.Settings, Modifier.weight(1f), !m.edit) { m.overlay = Overlay.Config }
+            // Andando: toque apaga a tela; segurar abre os Ajustes mesmo assim
+            if (m.moving) {
+                SmallBtn("Apagar", Icons.Rounded.DarkMode, Modifier.weight(1f), !m.edit, onLong = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    m.overlay = Overlay.Config
+                }) { m.setScreenOffState(true) }
+            } else {
+                SmallBtn("Ajustes", Icons.Rounded.Settings, Modifier.weight(1f), !m.edit, onLong = {
+                    m.setScreenOffState(true)
+                }) { m.overlay = Overlay.Config }
+            }
             SmallBtn("Apps", Icons.Rounded.Apps, Modifier.weight(1f), !m.edit) { m.overlay = Overlay.Apps }
         }
     }
@@ -626,6 +638,10 @@ fun MediaBlock(m: LauncherModel, v: Variant) {
         return
     }
     val empty = md.title.isEmpty()
+    if (empty) {
+        MediaEmpty(m, v)
+        return
+    }
     val title = if (empty) "Nada tocando" else md.title
     val artist = if (empty) "Abra um app de música" else md.artist
     val pos = md.position()
@@ -714,6 +730,8 @@ fun Art(bmp: ImageBitmap?, size: Int, title: String) {
 @Composable
 fun Progress(frac: Float, pos: Long, dur: Long) {
     val p = LocalPal.current
+    // Sem duração (comum no Bluetooth) a barra ficaria parada em 0:00: melhor não mostrar
+    if (dur <= 0) return
     Column(Modifier.fillMaxWidth()) {
         Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(p.cd2)) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(frac).background(p.ac))
@@ -804,8 +822,12 @@ fun OverlayHost(m: LauncherModel, o: Overlay) {
     ) {
         when (o) {
             is Overlay.Picker -> PickerPanel(m, o.target, card(Modifier.width(500.dp)))
-            Overlay.Config -> ConfigPanel(m, card(Modifier.width(500.dp)))
+            Overlay.Config -> ConfigPanel(m, card(Modifier.width(580.dp)))
             Overlay.Apps -> AppsPanel(m, card(Modifier.fillMaxSize(0.94f)))
+            Overlay.Colors -> Column(card(Modifier.width(580.dp))) {
+                PanelHeader("Cor base") { m.overlay = Overlay.Config }
+                BaseColorPicker(m)
+            }
         }
     }
 }
@@ -922,8 +944,8 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
     Column(modifier) {
         PanelHeader("Ajustes do launcher") { m.overlay = null }
         Column(
-            Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            Modifier.heightIn(max = 310.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SetRow("Layout") {
                 Chip("Editar layout", Icons.Rounded.Dashboard, primary = true) {
@@ -940,7 +962,13 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                     Seg(listOf("Não", "Sim"), if (m.bgMotion) 1 else 0) { m.updBgMotion(it == 1) }
                 }
             }
-            BaseColorPicker(m)
+            SetRow("Cor base") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(30.dp).clip(CircleShape).background(Color(m.baseColor)).border(2.dp, p.tx, CircleShape))
+                    W(10)
+                    Chip("Alterar", Icons.Rounded.ChevronRight) { m.overlay = Overlay.Colors }
+                }
+            }
             SetRow("Mapa na tela inicial") {
                 Seg(listOf("Não", "Sim"), if (m.showMap) 1 else 0) { m.updMap(it == 1) }
             }
@@ -956,7 +984,10 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                 Seg(listOf("Desligado", "Automático", "Sempre"), m.nightMode) { m.updNight(it) }
             }
             if (m.nightMode == 1) {
-                T("Liga das 18h às 6h", 12, p.tx2, align = TextAlign.End, modifier = Modifier.fillMaxWidth())
+                val (on, off) = m.nightWindow()
+                val f = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                T("Pelo pôr do sol: liga às ${f.format(java.util.Date(on))}, desliga às ${f.format(java.util.Date(off))}",
+                    13, p.tx2, align = TextAlign.End, modifier = Modifier.fillMaxWidth())
             }
             SetRow("Baixar brilho à noite") {
                 Seg(listOf("Não", "Sim"), if (m.dimScreen) 1 else 0) { v ->
@@ -994,7 +1025,7 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
 fun SetRow(label: String, muted: Boolean = false, content: @Composable () -> Unit) {
     val p = LocalPal.current
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        T(label, 13, if (muted) p.tx2 else p.tx, modifier = Modifier.weight(1f))
+        T(label, 15, if (muted) p.tx2 else p.tx, modifier = Modifier.weight(1f))
         content()
     }
 }
@@ -1012,9 +1043,9 @@ fun Seg(opts: List<String>, selected: Int, onSelect: (Int) -> Unit) {
                     .clip(RoundedCornerShape((7 + p.round).dp))
                     .background(if (i == selected) p.ac else Color.Transparent)
                     .clickable { onSelect(i) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .padding(horizontal = 16.dp, vertical = 11.dp)
             ) {
-                T(o, 12, if (i == selected) p.on else p.tx)
+                T(o, 14, if (i == selected) p.on else p.tx)
             }
         }
     }
@@ -1037,14 +1068,14 @@ fun Chip(
         Modifier
             .panel(p, 8, bg, border = !primary)
             .clickable(onClick = onClick)
-            .padding(horizontal = if (compact) 10.dp else 12.dp, vertical = if (compact) 3.dp else 7.dp),
+            .padding(horizontal = if (compact) 10.dp else 16.dp, vertical = if (compact) 3.dp else 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Ic(icon, 14, fg)
+            Ic(icon, if (compact) 14 else 18, fg)
             W(6)
         }
-        T(text, 12, fg)
+        T(text, if (compact) 12 else 14, fg)
     }
 }
 
@@ -1220,5 +1251,56 @@ fun CrashPanel(m: LauncherModel, text: String) {
                 Chip("Fechar") { m.dismissCrash() }
             }
         }
+    }
+}
+
+
+/** Nada tocando: atalhos grandes para começar a ouvir */
+@Composable
+fun MediaEmpty(m: LauncherModel, v: Variant) {
+    val p = LocalPal.current
+    val opts: List<Triple<String, ImageVector, () -> Unit>> = listOf(
+        Triple(m.slots[1].label, glyphFor(m.slots[1].label, m.slots[1].pkg) ?: Icons.Rounded.MusicNote) { m.tapSlot(1) },
+        Triple(m.slots[2].label, glyphFor(m.slots[2].label, m.slots[2].pkg) ?: Icons.Rounded.MusicNote) { m.tapSlot(2) },
+        Triple("Retomar", Icons.Rounded.PlayArrow) { m.resumeMedia() }
+    )
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
+        T("Nada tocando", 15, p.tx2, FontWeight.Medium,
+            align = if (v == Variant.NARROW) TextAlign.Center else TextAlign.Start, modifier = Modifier.fillMaxWidth())
+        if (v == Variant.NARROW) {
+            opts.forEach { MediaEmptyBtn(Modifier.fillMaxWidth(), it) }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                opts.forEach { MediaEmptyBtn(Modifier.weight(1f), it) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaEmptyBtn(mod: Modifier, o: Triple<String, ImageVector, () -> Unit>) {
+    val p = LocalPal.current
+    Row(
+        mod.height(56.dp).panel(p, 12, p.cd2).clickable { o.third() }.padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Ic(o.second, 22, p.ac)
+        W(8)
+        T(o.first, 14, p.tx, FontWeight.Medium)
+    }
+}
+
+/** Tela "apagada": preto com o relógio bem fraco. Toque em qualquer lugar acorda. */
+@Composable
+fun ScreenOff(m: LauncherModel) {
+    val c = Calendar.getInstance().apply { timeInMillis = m.now }
+    Box(
+        Modifier.fillMaxSize().background(Color.Black).clickable(
+            interactionSource = remember { MutableInteractionSource() }, indication = null
+        ) { m.setScreenOffState(false) },
+        contentAlignment = Alignment.Center
+    ) {
+        T("%02d:%02d".format(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE)), 40, Color(0xFF2A2D33), FontWeight.Medium)
     }
 }
