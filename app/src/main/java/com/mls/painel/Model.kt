@@ -45,6 +45,8 @@ class LauncherModel(val ctx: Context) {
         private set
     var showMedia by mutableStateOf(prefs.showMedia)
         private set
+    var dayLight by mutableStateOf(prefs.dayLight)
+        private set
     var dimScreen by mutableStateOf(prefs.dimScreen)
         private set
     var alertKmh by mutableStateOf(prefs.alertKmh)
@@ -111,6 +113,7 @@ class LauncherModel(val ctx: Context) {
     fun updBase(v: Int) { base = v; prefs.base = v }
     fun updNight(v: Int) { nightMode = v; prefs.nightMode = v }
     fun updMedia(v: Boolean) { showMedia = v; prefs.showMedia = v }
+    fun updDayLight(v: Boolean) { dayLight = v; prefs.dayLight = v }
     fun updAlert(v: Int) { alertKmh = v; prefs.alertKmh = v }
 
     fun updDim(v: Boolean) {

@@ -12,14 +12,27 @@ android {
         applicationId = "com.mls.painel"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+    }
+
+    // Chave fixa: assim cada APK novo atualiza por cima do anterior sem desinstalar.
+    signingConfigs {
+        create("painel") {
+            storeFile = file("painel.keystore")
+            storePassword = "painel123"
+            keyAlias = "painel"
+            keyPassword = "painel123"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("painel")
+        }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("painel")
         }
     }
 

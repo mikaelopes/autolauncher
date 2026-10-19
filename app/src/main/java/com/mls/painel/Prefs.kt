@@ -53,6 +53,11 @@ class Prefs(ctx: Context) {
         get() = p.getInt("night_mode", 1)
         set(v) = p.edit().putInt("night_mode", v).apply()
 
+    /** true = tema claro de alto contraste durante o dia */
+    var dayLight: Boolean
+        get() = p.getBoolean("day_light", true)
+        set(v) = p.edit().putBoolean("day_light", v).apply()
+
     var showMedia: Boolean
         get() = p.getBoolean("show_media", true)
         set(v) = p.edit().putBoolean("show_media", v).apply()

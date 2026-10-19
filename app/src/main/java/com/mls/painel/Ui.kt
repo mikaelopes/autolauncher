@@ -148,7 +148,7 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
         }
     }
 
-    val pal = remember(m.accent, m.base, night) { palette(m.accent, m.base, night) }
+    val pal = remember(m.accent, m.base, night, m.dayLight) { palette(m.accent, m.base, night, m.dayLight) }
 
     CompositionLocalProvider(LocalPal provides pal) {
         BoxWithConstraints(Modifier.fillMaxSize().background(pal.bg)) {
@@ -256,8 +256,7 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                 Modifier
                     .fillMaxWidth()
                     .height(rowH)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(p.cd)
+                    .panel(p, 14)
                     .combinedClickable(
                         enabled = !m.edit,
                         onLongClick = {
@@ -308,8 +307,7 @@ fun SmallBtn(
     Column(
         modifier
             .fillMaxHeight()
-            .clip(RoundedCornerShape(14.dp))
-            .background(p.cd)
+            .panel(p, 14)
             .combinedClickable(enabled = enabled, onLongClick = onLong, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -357,7 +355,7 @@ fun RightArea(m: LauncherModel, rowH: Dp, gap: Dp, modifier: Modifier, requestLo
 fun Block(m: LauncherModel, slot: Int, kind: String, v: Variant, modifier: Modifier, requestLocation: () -> Unit) {
     val p = LocalPal.current
     val selected = m.edit && m.sel == slot
-    Box(modifier.clip(RoundedCornerShape(14.dp)).background(if (selected) lerp(p.cd, p.ac, 0.28f) else p.cd)) {
+    Box(modifier.panel(p, 14, if (selected) lerp(p.cd, p.ac, 0.28f) else p.cd)) {
         Box(
             Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
             contentAlignment = Alignment.Center
@@ -391,43 +389,45 @@ fun Block(m: LauncherModel, slot: Int, kind: String, v: Variant, modifier: Modif
     }
 }
 
-private val DIAS = arrayOf("domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado")
-private val MESES = arrayOf("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez")
+private val DIAS = arrayOf("Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado")
 
 @Composable
 fun ClockBlock(m: LauncherModel, v: Variant) {
     val p = LocalPal.current
     val c = Calendar.getInstance().apply { timeInMillis = m.now }
     val time = "%02d:%02d".format(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
-    val date = "${DIAS[c.get(Calendar.DAY_OF_WEEK) - 1]}, ${c.get(Calendar.DAY_OF_MONTH)} de ${MESES[c.get(Calendar.MONTH)]}"
+    val weekday = DIAS[c.get(Calendar.DAY_OF_WEEK) - 1]
+    val date = "%02d/%02d/%d".format(c.get(Calendar.DAY_OF_MONTH), c.get(Calendar.MONTH) + 1, c.get(Calendar.YEAR))
     when (v) {
-        Variant.WIDE -> Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Variant.WIDE -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            T(time, 46, p.tx, FontWeight.Medium, ls = -1f)
+            W(16)
+            Box(Modifier.width(2.dp).height(36.dp).background(p.bd))
+            W(16)
             Column {
-                T(time, 42, p.tx, FontWeight.Medium, ls = -1f)
-                H(4)
-                T(date, 13, p.tx2)
+                T(weekday, 16, p.tx, FontWeight.Medium)
+                H(2)
+                T(date, 15, p.tx2)
             }
+            Spacer(Modifier.weight(1f))
             WeatherView(m)
         }
         Variant.NARROW -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             Column {
                 T(time, 42, p.tx, FontWeight.Medium, ls = -1f)
                 H(6)
-                T(date, 13, p.tx2)
+                T(weekday, 15, p.tx, FontWeight.Medium)
+                T(date, 14, p.tx2)
             }
             WeatherView(m)
         }
         Variant.BIG -> Column(
             Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically)
+            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)
         ) {
             T(time, 72, p.tx, FontWeight.Medium, align = TextAlign.Center, ls = -1f)
-            T(date, 14, p.tx2, align = TextAlign.Center)
+            T("$weekday, $date", 16, p.tx2, align = TextAlign.Center)
             WeatherView(m)
         }
     }
@@ -461,7 +461,12 @@ fun WeatherView(m: LauncherModel) {
         else -> "Há ${age / 3_600_000}h"
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Ic(info.icon, 32, if (p.night) lerp(info.tint, p.bg, 0.25f) else info.tint)
+        val tint = when {
+            p.night -> lerp(info.tint, p.bg, 0.25f)
+            p.light -> lerp(info.tint, Color.Black, 0.35f)
+            else -> info.tint
+        }
+        Ic(info.icon, 32, tint)
         W(10)
         Column {
             T("${m.wTemp.roundToInt()}°", 26, p.tx, FontWeight.Medium)
@@ -607,7 +612,7 @@ fun MediaBlock(m: LauncherModel, v: Variant) {
 fun Art(bmp: ImageBitmap?, size: Int) {
     val p = LocalPal.current
     Box(
-        Modifier.size(size.dp).clip(RoundedCornerShape(12.dp)).background(p.cd2),
+        Modifier.size(size.dp).panel(p, 12, p.cd2),
         contentAlignment = Alignment.Center
     ) {
         if (bmp != null) {
@@ -665,7 +670,12 @@ fun Controls(
 @Composable
 fun CircleBtn(icon: ImageVector, size: Int, bg: Color, fg: Color, onClick: () -> Unit) {
     Box(
-        Modifier.size(size.dp).clip(CircleShape).background(bg).clickable(onClick = onClick),
+        Modifier
+            .size(size.dp)
+            .clip(CircleShape)
+            .background(bg)
+            .then(if (bg == LocalPal.current.ac) Modifier else Modifier.border(1.5.dp, LocalPal.current.bd, CircleShape))
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Ic(icon, (size * 0.5f).toInt(), fg)
@@ -680,8 +690,7 @@ fun OverlayHost(m: LauncherModel, o: Overlay) {
     val scrimSrc = remember { MutableInteractionSource() }
     val cardSrc = remember { MutableInteractionSource() }
     fun card(size: Modifier) = size
-        .clip(RoundedCornerShape(14.dp))
-        .background(p.cd)
+        .panel(p, 14)
         .clickable(interactionSource = cardSrc, indication = null) {}
         .padding(16.dp)
 
@@ -727,8 +736,7 @@ fun PickerPanel(m: LauncherModel, target: Int, modifier: Modifier) {
                     cursorBrush = SolidColor(p.ac),
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(p.cd2)
+                        .panel(p, 8, p.cd2)
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                 )
                 W(8)
@@ -854,6 +862,9 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                     }
                 }
             }
+            SetRow("Tema de dia") {
+                Seg(listOf("Claro", "Escuro"), if (m.dayLight) 0 else 1) { m.updDayLight(it == 0) }
+            }
             SetRow("Modo noturno") {
                 Seg(listOf("Desligado", "Automático", "Sempre"), m.nightMode) { m.updNight(it) }
             }
@@ -905,7 +916,7 @@ fun SetRow(label: String, muted: Boolean = false, content: @Composable () -> Uni
 fun Seg(opts: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     val p = LocalPal.current
     Row(
-        Modifier.clip(RoundedCornerShape(9.dp)).background(p.cd2).padding(3.dp),
+        Modifier.panel(p, 9, p.cd2).padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         opts.forEachIndexed { i, o ->
@@ -937,8 +948,7 @@ fun Chip(
     val fg = if (primary) p.on else p.tx
     Row(
         Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg)
+            .panel(p, 8, bg, border = !primary)
             .clickable(onClick = onClick)
             .padding(horizontal = if (compact) 10.dp else 12.dp, vertical = if (compact) 3.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -954,7 +964,7 @@ fun Chip(
 @Composable
 fun ToastPill(text: String, modifier: Modifier) {
     val p = LocalPal.current
-    Box(modifier.clip(RoundedCornerShape(16.dp)).background(p.cd2).padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Box(modifier.panel(p, 16, p.cd2).padding(horizontal = 16.dp, vertical = 8.dp)) {
         T(text, 12, p.tx)
     }
 }
@@ -1001,3 +1011,10 @@ fun W(n: Int) = Spacer(Modifier.width(n.dp))
 
 @Composable
 fun H(n: Int) = Spacer(Modifier.height(n.dp))
+
+/** Fundo + borda visível: no sol forte a borda é o que separa um botão do outro. */
+fun Modifier.panel(p: Pal, radius: Int, bg: Color = p.cd, border: Boolean = true): Modifier {
+    val shape = RoundedCornerShape(radius.dp)
+    val m = this.clip(shape).background(bg)
+    return if (border) m.border(if (p.light) 1.5.dp else 1.dp, p.bd, shape) else m
+}
