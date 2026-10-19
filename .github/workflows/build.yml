@@ -30,6 +30,12 @@ jobs:
       - name: Renomear APK
         run: cp app/build/outputs/apk/debug/app-debug.apk Painel.apk
 
+      - name: Conferir assinatura
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $BT/apksigner verify --print-certs Painel.apk | grep -E "SHA-256|DN"
+          $BT/aapt dump badging Painel.apk | grep -o "versionCode='[0-9]*' versionName='[^']*'"
+
       - uses: actions/upload-artifact@v4
         with:
           name: Painel-apk
