@@ -944,6 +944,28 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
     val p = LocalPal.current
     Column(modifier) {
         PanelHeader("Ajustes do launcher") { m.overlay = null }
+        LaunchedEffect(Unit) { m.readBrightness() }
+        // Brilho no topo: é o ajuste mais usado
+        Row(
+            Modifier.fillMaxWidth().panel(p, 10, p.cd2).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (m.writeOk) {
+                Ic(Icons.Rounded.WbSunny, 18, p.tx2)
+                W(8)
+                Box(Modifier.weight(1f)) {
+                    ChannelSlider("", m.brightness, Color(0xFF15171A), Color(0xFFFFFFFF), { m.setBrightness(it) }) {}
+                }
+                W(4)
+                Ic(Icons.Rounded.WbSunny, 26, p.ac)
+            } else {
+                Ic(Icons.Rounded.WbSunny, 20, p.tx2)
+                W(10)
+                T("Brilho da tela", 15, p.tx, modifier = Modifier.weight(1f))
+                Chip("Liberar permissão", primary = true) { m.openWriteSettings() }
+            }
+        }
+        H(14)
         Column(
             Modifier.heightIn(max = 310.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)

@@ -283,6 +283,29 @@ class LauncherModel(val ctx: Context) {
         }
     }
 
+    /** Brilho da tela 0..255 (precisa da permissão "Modificar configurações do sistema") */
+    var brightness by mutableStateOf(128)
+        private set
+
+    fun readBrightness() {
+        try {
+            brightness = Settings.System.getInt(ctx.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
+        } catch (e: Exception) {
+        }
+    }
+
+    fun setBrightness(v: Int) {
+        val b = v.coerceIn(3, 255)
+        brightness = b
+        if (!Settings.System.canWrite(ctx)) return
+        try {
+            val cr = ctx.contentResolver
+            Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+            Settings.System.putInt(cr, Settings.System.SCREEN_BRIGHTNESS, b)
+        } catch (e: Exception) {
+        }
+    }
+
     /** Retoma o último player (tecla de mídia, sem permissão especial) */
     fun resumeMedia() {
         try {
