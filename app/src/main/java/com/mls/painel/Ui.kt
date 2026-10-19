@@ -359,14 +359,18 @@ fun Block(m: LauncherModel, slot: Int, kind: String, v: Variant, modifier: Modif
     val p = LocalPal.current
     val selected = m.edit && m.sel == slot
     Box(modifier.panel(p, 14, if (selected) lerp(p.cd, p.ac, 0.28f) else p.cd)) {
-        Box(
-            Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            when (kind) {
-                "clock" -> ClockBlock(m, v)
-                "speed" -> SpeedBlock(m, v, requestLocation)
-                else -> MediaBlock(m, v)
+        if (kind == "speed" && m.showMap) {
+            MapBlock(m, requestLocation)
+        } else {
+            Box(
+                Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when (kind) {
+                    "clock" -> ClockBlock(m, v)
+                    "speed" -> SpeedBlock(m, v, requestLocation)
+                    else -> MediaBlock(m, v)
+                }
             }
         }
         if (m.edit) {
@@ -895,6 +899,17 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                             T(b.name, 12, Color(0xFFECEEF1))
                         }
                     }
+                }
+            }
+            SetRow("Mapa na tela inicial") {
+                Seg(listOf("Não", "Sim"), if (m.showMap) 1 else 0) { m.updMap(it == 1) }
+            }
+            SetRow("Mapa offline de Fortaleza") {
+                when (m.map.state) {
+                    MapDl.RUNNING -> Chip("Baixando ${(m.map.progress * 100).roundToInt()}%") {}
+                    MapDl.DONE -> Chip("Baixado · atualizar", Icons.Rounded.Check) { m.downloadMap() }
+                    MapDl.ERROR -> Chip("Erro · tentar de novo", primary = true) { m.downloadMap() }
+                    MapDl.IDLE -> Chip("Baixar (~40 MB)", primary = true) { m.downloadMap() }
                 }
             }
             SetRow("Tema de dia") {

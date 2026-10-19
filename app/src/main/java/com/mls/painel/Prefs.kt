@@ -58,6 +58,14 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("day_light", true)
         set(v) = p.edit().putBoolean("day_light", v).apply()
 
+    var showMap: Boolean
+        get() = p.getBoolean("show_map", false)
+        set(v) = p.edit().putBoolean("show_map", v).apply()
+
+    var mapReady: Boolean
+        get() = p.getBoolean("map_ready", false)
+        set(v) = p.edit().putBoolean("map_ready", v).apply()
+
     var showMedia: Boolean
         get() = p.getBoolean("show_media", true)
         set(v) = p.edit().putBoolean("show_media", v).apply()

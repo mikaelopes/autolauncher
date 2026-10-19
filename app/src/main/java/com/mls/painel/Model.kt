@@ -27,6 +27,7 @@ class LauncherModel(val ctx: Context) {
     val prefs = Prefs(ctx)
     val gps = GpsRepo(ctx)
     val media = MediaRepo(ctx)
+    val map = MapRepo(ctx, prefs)
 
     var apps by mutableStateOf<List<AppInfo>>(emptyList())
         private set
@@ -47,6 +48,8 @@ class LauncherModel(val ctx: Context) {
     var showMedia by mutableStateOf(prefs.showMedia)
         private set
     var dayLight by mutableStateOf(prefs.dayLight)
+        private set
+    var showMap by mutableStateOf(prefs.showMap)
         private set
     var dimScreen by mutableStateOf(prefs.dimScreen)
         private set
@@ -123,6 +126,22 @@ class LauncherModel(val ctx: Context) {
     fun updNight(v: Int) { nightMode = v; prefs.nightMode = v }
     fun updMedia(v: Boolean) { showMedia = v; prefs.showMedia = v }
     fun updDayLight(v: Boolean) { dayLight = v; prefs.dayLight = v }
+
+    /** Mapa ocupa o bloco grande; a mídia vai para o estreito. */
+    fun updMap(v: Boolean) {
+        showMap = v
+        prefs.showMap = v
+        updOrder(if (v) listOf("clock", "media", "speed") else listOf("clock", "speed", "media"))
+    }
+
+    fun downloadMap() {
+        if (!online) {
+            show("Conecte a central no Wi-Fi primeiro")
+            return
+        }
+        map.download()
+        show("Baixando mapa de Fortaleza…")
+    }
     fun updAlert(v: Int) { alertKmh = v; prefs.alertKmh = v }
 
     fun updDim(v: Boolean) {
