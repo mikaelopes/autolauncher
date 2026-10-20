@@ -21,6 +21,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import android.view.ViewGroup
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -70,6 +75,22 @@ class MapCtl(val view: MapView) {
     var roadKey: String? = null
     /** Posição mostrada (encaixada na rua quando faz sentido) */
     var shownLoc: android.location.Location? = null
+    /** Marcador do carro desenhado por nós, em pixels da view do mapa */
+    var markX by mutableStateOf(Float.NaN)
+    var markY by mutableStateOf(0f)
+    var markRot by mutableStateOf(0f)
+
+    fun updateMarker() {
+        val mm = map ?: return
+        val l = shownLoc ?: return
+        try {
+            val pt = mm.projection.toScreenLocation(LatLng(l.latitude, l.longitude))
+            markX = pt.x
+            markY = pt.y
+            markRot = l.bearing - mm.cameraPosition.bearing.toFloat()
+        } catch (e: Exception) {
+        }
+    }
 }
 
 val LocalMap = staticCompositionLocalOf<MapCtl?> { null }
@@ -122,6 +143,9 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
             // Toque no mapa abre o CarPlay (ZLink) para navegar; segurar volta a seguir o carro
             mm.addOnMapClickListener { m.tapSlot(0); true }
             mm.addOnMapLongClickListener { ctl.follow = true; true }
+            // Marcador acompanha cada quadro do movimento do mapa
+            mm.addOnCameraMoveListener { ctl.updateMarker() }
+            mm.addOnCameraIdleListener { ctl.updateMarker() }
             mm.addOnCameraMoveStartedListener { reason ->
                 if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) ctl.follow = false
             }
@@ -142,7 +166,8 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
                             .useDefaultLocationEngine(false)
                             .build()
                     )
-                    lc.isLocationComponentEnabled = true
+                    // Marcador próprio (desenhado em Compose) no lugar do da biblioteca
+                    lc.isLocationComponentEnabled = false
                     lc.cameraMode = CameraMode.NONE
                     lc.renderMode = RenderMode.GPS
                     m.gps.lastLoc?.let { lc.forceLocationUpdate(it) }
@@ -188,6 +213,7 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
             }
         }
         ctl.shownLoc = l
+        ctl.updateMarker()
         val bearing = (snap?.bearing ?: m.gps.heading).toDouble()
         if (st != null) {
             try {
@@ -262,6 +288,8 @@ fun MapBlock(m: LauncherModel, requestLocation: () -> Unit) {
                 T(ctl.street, 15, p.tx, FontWeight.Medium, align = TextAlign.Center)
             }
         }
+
+        if (!ctl.markX.isNaN()) CarMarker(ctl)
 
         SpeedBadge(m, Modifier.align(Alignment.TopStart).padding(10.dp))
 
@@ -473,4 +501,32 @@ fun snapToRoad(st: Style, lat: Double, lon: Double, heading: Float, accuracy: Fl
         }
     }
     return best
+}
+
+
+/** Seta do carro: círculo de destaque e seta branca contornada, apontando para a direção. */
+@Composable
+fun CarMarker(ctl: MapCtl) {
+    val p = LocalPal.current
+    val size = 40.dp
+    Box(
+        Modifier
+            .offset { androidx.compose.ui.unit.IntOffset((ctl.markX - size.toPx() / 2).roundToInt(), (ctl.markY - size.toPx() / 2).roundToInt()) }
+            .size(size)
+            .graphicsLayer { rotationZ = ctl.markRot }
+            .drawBehind {
+                val c = Offset(this.size.width / 2, this.size.height / 2)
+                val r = this.size.width / 2
+                drawCircle(p.ac.copy(alpha = 0.22f), r, c)
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(c.x, c.y - r * 0.62f)
+                    lineTo(c.x + r * 0.45f, c.y + r * 0.5f)
+                    lineTo(c.x, c.y + r * 0.25f)
+                    lineTo(c.x - r * 0.45f, c.y + r * 0.5f)
+                    close()
+                }
+                drawPath(path, androidx.compose.ui.graphics.Color.White, style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.22f, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+                drawPath(path, p.ac)
+            }
+    )
 }

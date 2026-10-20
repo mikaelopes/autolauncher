@@ -352,6 +352,19 @@ class LauncherModel(val ctx: Context) {
     var info by mutableStateOf<Pair<String, String>?>(null)
 
     fun volumeDiagnostics() {
+        show("Gerando diagnóstico…")
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread {
+            val txt = try {
+                buildDiagnostics()
+            } catch (e: Throwable) {
+                "Erro ao gerar: ${'$'}e"
+            }
+            main.post { info = "Diagnóstico de volume" to txt }
+        }.start()
+    }
+
+    private fun buildDiagnostics(): String {
         val sb = StringBuilder()
         sb.append("Painel ").append(BuildConfigInfoCtx.version(ctx)).append('\n')
         sb.append("Fabricante: ").append(android.os.Build.MANUFACTURER).append(" / ").append(android.os.Build.BRAND).append('\n')
@@ -383,7 +396,7 @@ class LauncherModel(val ctx: Context) {
         } catch (e: Exception) {
             sb.append("(não foi possível listar)\n")
         }
-        info = "Diagnóstico de volume" to sb.toString() + "\n--- sistema do fabricante ---" + VendorScan.run(ctx)
+        return sb.toString() + "\n--- sistema do fabricante ---" + VendorScan.run(ctx)
     }
 
     fun copyText(txt: String) {

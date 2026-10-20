@@ -10,7 +10,7 @@ import java.util.zip.ZipFile
  * Só leitura; nada é alterado.
  */
 object VendorScan {
-    private val PKGS = listOf("com.xyauto.services", "com.xyauto.Settings", "com.xyauto.dspSetting", "com.android.systemui")
+    private val PKGS = listOf("com.xyauto.services", "com.xyauto.Settings", "com.xyauto.dspSetting")
     private val HIT = Regex("(?i)(volume|vol_|_vol|mute|amp|mcu|audio_?ctrl|sound)")
     private val ACTIONISH = Regex("^[A-Za-z0-9_.:/\\-]{6,120}$")
 
@@ -38,14 +38,18 @@ object VendorScan {
                 ZipFile(apk).use { z ->
                     for (e in z.entries()) {
                         val n = e.name
-                        if (n != "AndroidManifest.xml" && !(n.startsWith("classes") && n.endsWith(".dex"))) continue
-                        if (e.size > 30_000_000) continue
-                        val bytes = z.getInputStream(e).use { it.readBytes() }
-                        strings(bytes).filter { HIT.containsMatchIn(it) && ACTIONISH.matches(it) }.forEach { found.add(it) }
-                        if (found.size > 400) break
+                        val isManifest = n == "AndroidManifest.xml"
+                        if (!isManifest && !(n.startsWith("classes") && n.endsWith(".dex"))) continue
+                        // Lê em pedaços e guarda só o que interessa: memória baixa mesmo em apk grande
+                        z.getInputStream(e).buffered(64 * 1024).use { input ->
+                            scan(input, isManifest) { str ->
+                                if (found.size < 400 && HIT.containsMatchIn(str) && ACTIONISH.matches(str)) found.add(str)
+                            }
+                        }
+                        if (found.size >= 400) break
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 sb.append("(apk não legível: ").append(e.javaClass.simpleName).append(")\n")
             }
             found.take(160).forEach { sb.append("· ").append(it).append('\n') }
@@ -53,28 +57,35 @@ object VendorScan {
         return sb.toString()
     }
 
-    /** Sequências de texto em ASCII (dex) e UTF-16 (manifesto binário). */
-    private fun strings(b: ByteArray): List<String> {
-        val out = ArrayList<String>()
+    /** Sequências de texto em ASCII (dex) ou UTF-16 (manifesto binário), lidas em fluxo. */
+    private fun scan(input: java.io.InputStream, utf16: Boolean, onString: (String) -> Unit) {
         val cur = StringBuilder()
-        for (x in b) {
-            val c = x.toInt() and 0xFF
-            if (c in 0x20..0x7E) cur.append(c.toChar()) else {
-                if (cur.length >= 6) out.add(cur.toString())
-                cur.setLength(0)
+        val buf = ByteArray(64 * 1024)
+        var odd = -1
+        while (true) {
+            val n = input.read(buf)
+            if (n <= 0) break
+            var i = 0
+            while (i < n) {
+                if (utf16) {
+                    if (odd < 0) { odd = buf[i].toInt() and 0xFF; i++; continue }
+                    val lo = odd
+                    val hi = buf[i].toInt() and 0xFF
+                    odd = -1
+                    if (hi == 0 && lo in 0x20..0x7E) cur.append(lo.toChar()) else flush(cur, onString)
+                } else {
+                    val c = buf[i].toInt() and 0xFF
+                    if (c in 0x20..0x7E) cur.append(c.toChar()) else flush(cur, onString)
+                }
+                if (cur.length > 200) cur.setLength(0)
+                i++
             }
         }
-        var i = 0
+        flush(cur, onString)
+    }
+
+    private fun flush(cur: StringBuilder, onString: (String) -> Unit) {
+        if (cur.length >= 6) onString(cur.toString())
         cur.setLength(0)
-        while (i + 1 < b.size) {
-            val lo = b[i].toInt() and 0xFF
-            val hi = b[i + 1].toInt() and 0xFF
-            if (hi == 0 && lo in 0x20..0x7E) cur.append(lo.toChar()) else {
-                if (cur.length >= 6) out.add(cur.toString())
-                cur.setLength(0)
-            }
-            i += 2
-        }
-        return out
     }
 }
