@@ -65,9 +65,31 @@ object VolumeLab {
         },
         Test("6 · Broadcast action.ampctrl.set") { c, v ->
             c.sendBroadcast(Intent("action.ampctrl.set").putExtra("volume", v + 1)); "enviado"
-        },
-        Test("7 · Tecla volume + (mcukey)") { c, _ ->
-            c.sendBroadcast(Intent("action.mcukey.set").putExtra("key", 24).putExtra("keycode", 24)); "enviado"
         }
+        // Teste de tecla pelo MCU removido: código errado reinicia a central
     )
+
+    /** Salva os apps da xyauto (e a barra de sistema) na pasta Download para análise. */
+    fun exportApks(ctx: Context): String {
+        val pkgs = listOf("com.xyauto.Settings", "com.xyauto.services", "com.xyauto.dspSetting", "com.android.systemui")
+        val sb = StringBuilder()
+        for (p in pkgs) {
+            try {
+                val src = java.io.File(ctx.packageManager.getApplicationInfo(p, 0).sourceDir)
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "painel_$p.apk")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/Painel")
+                }
+                val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("sem acesso à pasta")
+                ctx.contentResolver.openOutputStream(uri)?.use { out -> src.inputStream().use { it.copyTo(out) } }
+                sb.append("✓ ").append(p).append(" (").append(src.length() / 1024).append(" KB)\n")
+            } catch (e: Exception) {
+                sb.append("✗ ").append(p).append(": ").append(e.message?.take(60)).append('\n')
+            }
+        }
+        sb.append("\nSalvos em Download/Painel")
+        return sb.toString()
+    }
 }

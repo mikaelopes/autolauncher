@@ -352,6 +352,15 @@ class LauncherModel(val ctx: Context) {
     /** Testes de volume: resultado de cada tentativa */
     var labLog by mutableStateOf("")
 
+    fun exportVendorApps() {
+        show("Salvando apps…")
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread {
+            val r = try { VolumeLab.exportApks(ctx) } catch (e: Throwable) { "Erro: ${'$'}e" }
+            main.post { info = "Apps da central" to r }
+        }.start()
+    }
+
     fun runVolumeTest(i: Int) {
         val t = VolumeLab.tests[i]
         val before = VolumeLab.read(ctx)

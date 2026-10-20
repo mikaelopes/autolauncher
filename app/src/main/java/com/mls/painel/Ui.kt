@@ -870,6 +870,8 @@ fun OverlayHost(m: LauncherModel, o: Overlay) {
                         }
                         H(8)
                         Chip("Copiar resultados", primary = true) { m.copyText(m.labLog) }
+                        H(6)
+                        Chip("Salvar apps da central") { m.overlay = null; m.exportVendorApps() }
                     }
                 }
             }
