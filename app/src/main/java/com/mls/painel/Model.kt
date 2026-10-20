@@ -75,11 +75,16 @@ class LauncherModel(val ctx: Context) {
 
     init {
         // Launcher não pode ficar em loop: se fechou com o mapa ligado, desliga o mapa
-        if (crash != null && prefs.showMap) {
-            updMap(false)
-            crash = "Desliguei o mapa para o Painel não travar.\n\n" + crash
-        }
+        // Uma interrupção só (central desligada com a ignição, reinício) não conta:
+        // o mapa só é desligado se o app morrer duas vezes seguidas abrindo o mapa.
+        if (prefs.mapOpening) prefs.mapFails = prefs.mapFails + 1
         prefs.mapOpening = false
+        if (prefs.mapFails >= 2 && prefs.showMap) {
+            updMap(false)
+            prefs.mapFails = 0
+            crash = "Desliguei o mapa porque o Painel fechou duas vezes seguidas abrindo ele. " +
+                "Pode religar em Ajustes.\n\n" + (crash ?: "")
+        }
     }
 
     fun dismissCrash() {
@@ -338,16 +343,60 @@ class LauncherModel(val ctx: Context) {
      * o painel de volume da central (em muitas centrais é aí que o fabricante intercepta).
      */
     fun volume(dir: Int) {
+        volExec.execute { stepVolume(dir) }
+    }
+
+    /** Volume da central (o número que aparece na barra de status), ou -1 se não existir */
+    private fun mcuVolume(): Int = try {
+        Settings.System.getInt(ctx.contentResolver, "McuMainVolume", -1)
+    } catch (e: Exception) {
+        -1
+    }
+
+    private val volExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /**
+     * Um toque = 1 ponto na central. O volume de música do Android tem mais degraus (63)
+     * que a central, então ajusta e confere o McuMainVolume até ele mudar (no máx. 4 degraus).
+     */
+    private fun stepVolume(dir: Int) {
         try {
-            audio.adjustSuggestedStreamVolume(
-                if (dir > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
-                AudioManager.USE_DEFAULT_STREAM_TYPE,
-                AudioManager.FLAG_SHOW_UI
-            )
+            val st = AudioManager.STREAM_MUSIC
+            val max = audio.getStreamMaxVolume(st)
+            if (savedVol >= 0 && dir > 0) {
+                // estava mudo: sobe a partir do volume salvo
+                audio.setStreamVolume(st, savedVol, 0)
+                savedVol = -1
+            }
+            val before = mcuVolume()
+            var idx = audio.getStreamVolume(st)
+            var tries = 0
+            while (tries < 4) {
+                idx = (idx + dir).coerceIn(0, max)
+                audio.setStreamVolume(st, idx, 0)
+                tries++
+                if (idx == 0 || idx == max) break
+                if (before < 0) { if (tries >= 2) break; continue }
+                var changed = false
+                for (w in 0 until 4) {
+                    Thread.sleep(40)
+                    if (mcuVolume() != before) { changed = true; break }
+                }
+                if (changed) break
+            }
+            if (idx > 0) savedVol = -1
         } catch (e: Exception) {
         }
-        readVolume()
+        main.post {
+            readVolume()
+            val mv = mcuVolume()
+            show(if (muted) "Mudo" else "Volume " + (if (mv >= 0) mv else vol))
+        }
     }
+
+    /** Volume guardado ao ativar o mudo (-1 = não está mudo pelo Painel) */
+    private var savedVol = -1
 
     /** Testes de volume: resultado de cada tentativa */
     var labLog by mutableStateOf("")
@@ -435,12 +484,26 @@ class LauncherModel(val ctx: Context) {
     }
 
     fun toggleMute() {
-        try {
-            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0)
-        } catch (e: Exception) {
+        volExec.execute {
+            try {
+                val st = AudioManager.STREAM_MUSIC
+                val cur = audio.getStreamVolume(st)
+                if (cur > 0) {
+                    savedVol = cur
+                    audio.setStreamVolume(st, 0, 0)
+                } else {
+                    val back = if (savedVol > 0) savedVol else audio.getStreamMaxVolume(st) / 3
+                    audio.setStreamVolume(st, back, 0)
+                    savedVol = -1
+                }
+            } catch (e: Exception) {
+            }
+            main.post {
+                readVolume()
+                val mv = mcuVolume()
+                show(if (muted) "Mudo" else "Volume " + (if (mv >= 0) mv else vol))
+            }
         }
-        readVolume()
-        show(if (muted) "Som mudo" else "Som ligado")
     }
 
     /** Nada tocando há alguns segundos: o card de mídia some e o outro bloco ocupa o espaço */

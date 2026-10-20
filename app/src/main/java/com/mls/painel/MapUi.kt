@@ -186,6 +186,7 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
             m.mapLive = true
             kotlinx.coroutines.delay(3000)
             m.prefs.mapOpening = false
+            m.prefs.mapFails = 0
         }
     }
 

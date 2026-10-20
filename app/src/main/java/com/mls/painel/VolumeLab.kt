@@ -76,20 +76,15 @@ object VolumeLab {
         for (p in pkgs) {
             try {
                 val src = java.io.File(ctx.packageManager.getApplicationInfo(p, 0).sourceDir)
-                val values = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "painel_$p.apk")
-                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
-                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Download/Painel")
-                }
-                val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                    ?: throw IllegalStateException("sem acesso à pasta")
-                ctx.contentResolver.openOutputStream(uri)?.use { out -> src.inputStream().use { it.copyTo(out) } }
+                val dir = (ctx.getExternalFilesDir(null) ?: ctx.filesDir)
+                val dst = java.io.File(dir, "painel_$p.apk")
+                src.inputStream().use { inp -> dst.outputStream().use { inp.copyTo(it) } }
                 sb.append("✓ ").append(p).append(" (").append(src.length() / 1024).append(" KB)\n")
             } catch (e: Exception) {
                 sb.append("✗ ").append(p).append(": ").append(e.message?.take(60)).append('\n')
             }
         }
-        sb.append("\nSalvos em Download/Painel")
+        sb.append("\nSalvos em Android/data/com.mls.painel/files")
         return sb.toString()
     }
 }

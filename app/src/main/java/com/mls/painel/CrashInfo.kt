@@ -39,10 +39,6 @@ object CrashInfo {
             } catch (e: Exception) {
             }
         }
-        if (prefs.mapOpening) {
-            crashed = true
-            text = (text ?: "") + "\nO app fechou enquanto o mapa abria.\n"
-        }
         if (!crashed) return null
         return (text ?: "") + "\n--- log ---\n" + logcat()
     }

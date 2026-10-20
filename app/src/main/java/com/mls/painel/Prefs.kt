@@ -76,6 +76,11 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("map_opening", false)
         set(v) = p.edit().putBoolean("map_opening", v).commit().let { }
 
+    /** Quantas vezes seguidas o app morreu enquanto o mapa abria */
+    var mapFails: Int
+        get() = p.getInt("map_fails", 0)
+        set(v) = p.edit().putInt("map_fails", v).commit().let { }
+
     var bgMotion: Boolean
         get() = p.getBoolean("bg_motion", true)
         set(v) = p.edit().putBoolean("bg_motion", v).apply()
