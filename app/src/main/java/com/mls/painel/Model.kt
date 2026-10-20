@@ -356,7 +356,7 @@ class LauncherModel(val ctx: Context) {
         show("Salvando apps…")
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         Thread {
-            val r = try { VolumeLab.exportApks(ctx) } catch (e: Throwable) { "Erro: ${'$'}e" }
+            val r = try { VolumeLab.exportApks(ctx) } catch (e: Throwable) { "Erro: $e" }
             main.post { info = "Apps da central" to r }
         }.start()
     }
@@ -365,10 +365,10 @@ class LauncherModel(val ctx: Context) {
         val t = VolumeLab.tests[i]
         val before = VolumeLab.read(ctx)
         val v = VolumeLab.mcuVolume(ctx) ?: vol
-        val r = try { t.run(ctx, v) } catch (e: Exception) { "erro: ${'$'}{e.message}" }
+        val r = try { t.run(ctx, v) } catch (e: Exception) { "erro: ${e.message}" }
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             val after = VolumeLab.read(ctx)
-            labLog = "${'$'}{t.name}: ${'$'}r\nantes:  ${'$'}before\ndepois: ${'$'}after\n\n" + labLog
+            labLog = "${t.name}: $r\nantes:  $before\ndepois: $after\n\n" + labLog
         }, 700)
     }
 
@@ -382,7 +382,7 @@ class LauncherModel(val ctx: Context) {
             val txt = try {
                 buildDiagnostics()
             } catch (e: Throwable) {
-                "Erro ao gerar: ${'$'}e"
+                "Erro ao gerar: $e"
             }
             main.post { info = "Diagnóstico de volume" to txt }
         }.start()
