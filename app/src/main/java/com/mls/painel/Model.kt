@@ -383,7 +383,7 @@ class LauncherModel(val ctx: Context) {
         } catch (e: Exception) {
             sb.append("(não foi possível listar)\n")
         }
-        info = "Diagnóstico de volume" to sb.toString()
+        info = "Diagnóstico de volume" to sb.toString() + "\n--- sistema do fabricante ---" + VendorScan.run(ctx)
     }
 
     fun copyText(txt: String) {
