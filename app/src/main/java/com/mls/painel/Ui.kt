@@ -848,6 +848,31 @@ fun OverlayHost(m: LauncherModel, o: Overlay) {
             is Overlay.Picker -> PickerPanel(m, o.target, card(Modifier.width(500.dp)))
             Overlay.Config -> ConfigPanel(m, card(Modifier.width(580.dp)))
             Overlay.Apps -> AppsPanel(m, card(Modifier.fillMaxSize(0.94f)))
+            Overlay.VolumeLab -> Column(card(Modifier.width(600.dp))) {
+                PanelHeader("Testes de volume") { m.overlay = Overlay.Config }
+                T("Toque em cada teste com música tocando e veja se o som ou o número da central muda.", 12, p.tx2, maxLines = 2)
+                H(8)
+                Row(Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f).heightIn(max = 230.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        VolumeLab.tests.forEachIndexed { i, t -> Chip(t.name) { m.runVolumeTest(i) } }
+                    }
+                    W(10)
+                    Column(Modifier.weight(1f)) {
+                        Box(
+                            Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF0B0D10))
+                                .verticalScroll(rememberScrollState()).padding(8.dp)
+                        ) {
+                            BasicText(
+                                m.labLog.ifEmpty { "Resultados aparecem aqui" },
+                                style = TextStyle(color = Color(0xFFE6E9EE), fontSize = 9.sp, lineHeight = 11.sp,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                            )
+                        }
+                        H(8)
+                        Chip("Copiar resultados", primary = true) { m.copyText(m.labLog) }
+                    }
+                }
+            }
             Overlay.Colors -> Column(card(Modifier.width(580.dp))) {
                 PanelHeader("Cor base") { m.overlay = Overlay.Config }
                 BaseColorPicker(m)
@@ -1051,6 +1076,9 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
             }
             SetRow("Mostrar mídia") {
                 Seg(listOf("Não", "Sim"), if (m.showMedia) 1 else 0) { m.updMedia(it == 1) }
+            }
+            SetRow("Testes de volume") {
+                Chip("Abrir") { m.overlay = Overlay.VolumeLab }
             }
             SetRow("Diagnóstico de volume") {
                 Chip("Gerar") { m.overlay = null; m.volumeDiagnostics() }

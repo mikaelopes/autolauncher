@@ -22,6 +22,7 @@ sealed class Overlay {
     object Config : Overlay()
     object Apps : Overlay()
     object Colors : Overlay()
+    object VolumeLab : Overlay()
 }
 
 class LauncherModel(val ctx: Context) {
@@ -348,6 +349,20 @@ class LauncherModel(val ctx: Context) {
         readVolume()
     }
 
+    /** Testes de volume: resultado de cada tentativa */
+    var labLog by mutableStateOf("")
+
+    fun runVolumeTest(i: Int) {
+        val t = VolumeLab.tests[i]
+        val before = VolumeLab.read(ctx)
+        val v = VolumeLab.mcuVolume(ctx) ?: vol
+        val r = try { t.run(ctx, v) } catch (e: Exception) { "erro: ${'$'}{e.message}" }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            val after = VolumeLab.read(ctx)
+            labLog = "${'$'}{t.name}: ${'$'}r\nantes:  ${'$'}before\ndepois: ${'$'}after\n\n" + labLog
+        }, 700)
+    }
+
     /** Janela de informação com botão de copiar (diagnósticos) */
     var info by mutableStateOf<Pair<String, String>?>(null)
 
@@ -396,7 +411,8 @@ class LauncherModel(val ctx: Context) {
         } catch (e: Exception) {
             sb.append("(não foi possível listar)\n")
         }
-        return sb.toString() + "\n--- sistema do fabricante ---" + VendorScan.run(ctx)
+        return sb.toString() + "\n--- configurações de volume ---\n" + VolumeLab.dumpSettings(ctx) +
+            "\n--- sistema do fabricante ---" + VendorScan.run(ctx)
     }
 
     fun copyText(txt: String) {
