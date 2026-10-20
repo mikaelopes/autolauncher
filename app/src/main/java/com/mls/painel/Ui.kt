@@ -238,7 +238,7 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
                     m.crash?.let { CrashPanel(m, it) }
                     m.info?.let { InfoPanel(m, it.first, it.second) }
                     m.toast?.let {
-                        ToastPill(it, Modifier.align(Alignment.TopCenter).padding(top = 36.dp))
+                        ToastPill(it, Modifier.align(Alignment.TopCenter).padding(top = 14.dp))
                     }
                 }
             }
@@ -1161,8 +1161,26 @@ fun Chip(
 @Composable
 fun ToastPill(text: String, modifier: Modifier) {
     val p = LocalPal.current
-    Box(modifier.panel(p, 16, p.cd2).padding(horizontal = 16.dp, vertical = 8.dp)) {
-        T(text, 12, p.tx)
+    // Fundo sólido e escuro em qualquer tema: precisa ser lido de relance com o carro andando
+    val shape = RoundedCornerShape(18.dp)
+    val icon = when {
+        text == "Mudo" -> Icons.AutoMirrored.Rounded.VolumeOff
+        text.startsWith("Volume") -> Icons.AutoMirrored.Rounded.VolumeUp
+        else -> null
+    }
+    Row(
+        modifier
+            .shadow(14.dp, shape)
+            .background(Color(0xF20B1220), shape)
+            .border(1.dp, Color(0x40FFFFFF), shape)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Ic(icon, 20, if (text == "Mudo") Color(0xFFF87171) else Color.White)
+            Spacer(Modifier.width(10.dp))
+        }
+        T(text, if (icon != null) 18 else 14, Color.White, FontWeight.SemiBold)
     }
 }
 
