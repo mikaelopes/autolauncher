@@ -7,10 +7,6 @@ import androidx.compose.ui.graphics.toArgb
 import kotlin.math.max
 import kotlin.math.min
 
-/** 0 = Vidro, 1 = Blocos */
-const val THEME_GLASS = 0
-const val THEME_BLOCKS = 1
-
 /** Cor base de referência: todas as paletas abaixo foram desenhadas em cima dela. */
 const val DEFAULT_BASE = 0xFF1D4ED8.toInt()
 
@@ -38,34 +34,21 @@ data class Pal(
     val tx2: Color,
     val red: Color,
     val gps: Color,
-    val round: Int,         // arredondamento extra do tema
-    val tiles: List<Color>, // fundo dos 3 atalhos
-    val tileFg: Color,
-    val iconBg: Color,
+    val iconBg: Color,      // quadrado do ícone nos atalhos
     val iconFg: Color,
-    val clockBg: Color,
-    val clockFg: Color,
-    val clockMut: Color,
-    val speedBg: Color,
-    val speedFg: Color,
-    val miniBg: Color,
-    val miniFg: Color,
-    val miniIcon: Color,
     val map: MapPal,
+    /** Depois do pôr do sol: capa do álbum e ícones do clima ficam mais apagados */
     val night: Boolean,
-    val light: Boolean,
     // Vidro: cards com degradê, borda com reflexo e brilho no fundo
-    val glass: Boolean = false,
-    val cdTop: Color = Color.Transparent,
-    val cdBottom: Color = Color.Transparent,
-    val edgeTop: Color = Color.Transparent,
-    val edgeBottom: Color = Color.Transparent,
-    val glow: Color = Color.Transparent,
-    val shadow: Color = Color.Transparent,
+    val cdTop: Color,
+    val cdBottom: Color,
+    val edgeTop: Color,
+    val edgeBottom: Color,
+    val glow: Color,
     /** Manchas de cor que passeiam devagar atrás do vidro */
-    val blobs: List<Color> = emptyList(),
+    val blobs: List<Color>,
     /** Fundo sólido dos menus e janelas (nunca transparente) */
-    val sheet: Color = Color.Unspecified
+    val sheet: Color
 )
 
 private fun c(hex: Long) = Color(hex)
@@ -74,66 +57,18 @@ private fun onFor(c: Color): Color =
 
 // ---------------------------------------------------------------- paletas de referência (base azul)
 
-private fun glassDay() = Pal(
-    bg = c(0xFFD6E2F2), bg2 = c(0xFFC9D8EC),
-    cd = c(0xD9FFFFFF), cd2 = c(0xFFE3EAF4), bd = c(0xFFB4C4DB),
-    ac = c(0xFF1D4ED8), on = Color.White, tx = c(0xFF0B1220), tx2 = c(0xFF33415A),
-    red = c(0xFFB3261E), gps = c(0xFF0F6E56), round = 8,
-    tiles = List(3) { c(0xD9FFFFFF) }, tileFg = c(0xFF0B1220), iconBg = c(0xFF1D4ED8), iconFg = Color.White,
-    clockBg = c(0xD9FFFFFF), clockFg = c(0xFF0B1220), clockMut = c(0xFF33415A),
-    speedBg = c(0xD9FFFFFF), speedFg = c(0xFF0B1220),
-    miniBg = c(0xD9FFFFFF), miniFg = c(0xFF33415A), miniIcon = c(0xFF1D4ED8),
-    map = MapPal(c(0xFFEEF2F7), c(0xFFB9D0EA), c(0xFFFFFFFF), c(0xFFD2DBE6), c(0xFFFFFFFF), c(0xFF9FB2CC), c(0xFFDFE8E2), c(0xFF5A6B85)),
-    night = false, light = true,
-    glass = true, cdTop = c(0xD1FFFFFF), cdBottom = c(0x85FFFFFF), edgeTop = c(0xFFFFFFFF), edgeBottom = c(0x66FFFFFF),
-    glow = c(0xFFA9C4EE), shadow = c(0x55345A8C),
-    blobs = listOf(c(0xFF6F9BEF), c(0xFF8FD3F0), c(0xFFAE9CF0)),
-    sheet = c(0xFFF3F7FD)
-)
-
-private fun glassNight() = Pal(
+private fun glass() = Pal(
     bg = c(0xFF0F1D40), bg2 = c(0xFF0A1430),
     cd = c(0x1DFFFFFF), cd2 = c(0x24FFFFFF), bd = c(0x42FFFFFF),
     ac = c(0xFF9DB8F5), on = c(0xFF0F1D40), tx = Color.White, tx2 = c(0xC2FFFFFF),
-    red = c(0xFFE5534B), gps = c(0xFF4FB896), round = 8,
-    tiles = List(3) { c(0x1DFFFFFF) }, tileFg = Color.White, iconBg = c(0xFF9DB8F5), iconFg = c(0xFF0F1D40),
-    clockBg = c(0x1DFFFFFF), clockFg = Color.White, clockMut = c(0xC2FFFFFF),
-    speedBg = c(0x1DFFFFFF), speedFg = Color.White,
-    miniBg = c(0x1DFFFFFF), miniFg = c(0xC2FFFFFF), miniIcon = c(0xFF9DB8F5),
+    red = c(0xFFE5534B), gps = c(0xFF4FB896),
+    iconBg = c(0xFF9DB8F5), iconFg = c(0xFF0F1D40),
     map = MapPal(c(0xFF111D3B), c(0xFF0A1430), c(0xFF1F2F55), c(0xFF172446), c(0xFF34508A), c(0xFF253A66), c(0xFF13253B), c(0xFF8EA3C8)),
-    night = true, light = false,
-    glass = true, cdTop = c(0x2EFFFFFF), cdBottom = c(0x0FFFFFFF), edgeTop = c(0x73FFFFFF), edgeBottom = c(0x14FFFFFF),
-    glow = c(0xFF1D3A78), shadow = c(0x99000000),
+    night = false,
+    cdTop = c(0x2EFFFFFF), cdBottom = c(0x0FFFFFFF), edgeTop = c(0x73FFFFFF), edgeBottom = c(0x14FFFFFF),
+    glow = c(0xFF1D3A78),
     blobs = listOf(c(0xFF2350B0), c(0xFF0F5F7E), c(0xFF3A2A8C)),
     sheet = c(0xFF15244A)
-)
-
-private fun blocksDay() = Pal(
-    bg = c(0xFFE6EDF6), bg2 = c(0xFFE6EDF6),
-    cd = Color.White, cd2 = c(0xFFE8EEF7), bd = c(0xFFCBD7E8),
-    ac = c(0xFF1D4ED8), on = Color.White, tx = c(0xFF0B1630), tx2 = c(0xFF45557A),
-    red = c(0xFFB3261E), gps = c(0xFF0F6E56), round = 12,
-    tiles = listOf(c(0xFF1E3A8A), c(0xFF1D4ED8), c(0xFF3B82F6)), tileFg = Color.White,
-    iconBg = c(0x33FFFFFF), iconFg = Color.White,
-    clockBg = c(0xFF0F1E3D), clockFg = Color.White, clockMut = c(0xFFA9BBDC),
-    speedBg = c(0xFFDBEAFE), speedFg = c(0xFF0B1630),
-    miniBg = c(0xFF0F1E3D), miniFg = Color.White, miniIcon = c(0xFF93C5FD),
-    map = MapPal(c(0xFFEEF3FA), c(0xFFA9CDF2), c(0xFFFFFFFF), c(0xFFC6D5EA), c(0xFF93C5FD), c(0xFF3B82F6), c(0xFFDBE7F3), c(0xFF45557A)),
-    night = false, light = true
-)
-
-private fun blocksNight() = Pal(
-    bg = c(0xFF050A14), bg2 = c(0xFF050A14),
-    cd = c(0xFF0F1A2E), cd2 = c(0xFF1A2A48), bd = c(0xFF1F2E4D),
-    ac = c(0xFF93C5FD), on = c(0xFF0B1630), tx = c(0xFFEAF1FB), tx2 = c(0xFFA3B4D1),
-    red = c(0xFFE5534B), gps = c(0xFF4FB896), round = 12,
-    tiles = listOf(c(0xFF1E3A8A), c(0xFF1D4ED8), c(0xFF2563EB)), tileFg = Color.White,
-    iconBg = c(0x33FFFFFF), iconFg = Color.White,
-    clockBg = c(0xFF0F1A2E), clockFg = c(0xFFEAF1FB), clockMut = c(0xFF93A6C8),
-    speedBg = c(0xFF10234A), speedFg = c(0xFFCFE1FF),
-    miniBg = c(0xFF14213A), miniFg = c(0xFFE3ECF9), miniIcon = c(0xFF93C5FD),
-    map = MapPal(c(0xFF0B1426), c(0xFF0C2347), c(0xFF1B2A47), c(0xFF121E35), c(0xFF2563EB), c(0xFF1E3A8A), c(0xFF0F1C2E), c(0xFF93A6C8)),
-    night = true, light = false
 )
 
 // ---------------------------------------------------------------- troca de cor base
@@ -193,28 +128,21 @@ private class Shift(base: Int) {
     }
 }
 
-fun palette(theme: Int, base: Int, night: Boolean): Pal {
-    val ref = when {
-        theme == THEME_GLASS && night -> glassNight()
-        theme == THEME_GLASS -> glassDay()
-        night -> blocksNight()
-        else -> blocksDay()
-    }
+/** Único tema: Vidro escuro, com o matiz levado para a cor base escolhida. */
+fun palette(base: Int, night: Boolean): Pal {
+    val ref = glass()
     val s = Shift(base)
     val ac = s.of(ref.ac)
     val iconBg = s.of(ref.iconBg)
     return ref.copy(
         bg = s.of(ref.bg), bg2 = s.of(ref.bg2),
         cd = s.of(ref.cd), cd2 = s.of(ref.cd2), bd = s.of(ref.bd),
-        ac = ac, on = if (ref.on == Color.White || ref.on.luminance() < 0.1f) onFor(ac) else ref.on,
+        ac = ac, on = onFor(ac),
         tx = s.of(ref.tx), tx2 = s.of(ref.tx2),
-        tiles = ref.tiles.map { s.of(it) }, tileFg = ref.tileFg,
-        iconBg = iconBg, iconFg = if (iconBg.alpha < 0.5f) ref.iconFg else onFor(iconBg),
-        clockBg = s.of(ref.clockBg), clockFg = s.of(ref.clockFg), clockMut = s.of(ref.clockMut),
-        speedBg = s.of(ref.speedBg), speedFg = s.of(ref.speedFg),
-        miniBg = s.of(ref.miniBg), miniFg = s.of(ref.miniFg), miniIcon = s.of(ref.miniIcon),
-        glow = s.of(ref.glow), shadow = s.of(ref.shadow), blobs = ref.blobs.map { s.of(it) },
-        sheet = if (ref.sheet == Color.Unspecified) s.of(ref.cd) else s.of(ref.sheet),
+        iconBg = iconBg, iconFg = onFor(iconBg),
+        night = night,
+        glow = s.of(ref.glow), blobs = ref.blobs.map { s.of(it) },
+        sheet = s.of(ref.sheet),
         map = MapPal(
             s.of(ref.map.land), s.of(ref.map.water), s.of(ref.map.road), s.of(ref.map.casing),
             s.of(ref.map.main), s.of(ref.map.mainCasing), s.of(ref.map.park), s.of(ref.map.label)
@@ -224,4 +152,4 @@ fun palette(theme: Int, base: Int, night: Boolean): Pal {
 
 fun Color.argb(): Int = toArgb()
 
-val LocalPal = staticCompositionLocalOf { palette(THEME_BLOCKS, DEFAULT_BASE, false) }
+val LocalPal = staticCompositionLocalOf { palette(DEFAULT_BASE, false) }

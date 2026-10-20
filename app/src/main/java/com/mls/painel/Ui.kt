@@ -147,16 +147,22 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
     }
 
     val tick = m.now
-    val night = remember(tick, m.nightMode) { m.isNight() }
+    val night = remember(tick) { m.isNight() }
     LaunchedEffect(night, m.dimScreen, m.writeOk) { m.applyBrightness(night) }
 
     LaunchedEffect(m.toastId) {
-        if (m.toast != null) {
-            delay(1800)
+        val t = m.toast
+        if (t != null) {
+            delay(if (t.length > 30) 4000 else 1800)
             m.toast = null
         }
     }
     LaunchedEffect(Unit) {
+        m.takeStartNotice()?.let {
+            delay(1200)
+            m.show(it)
+            return@LaunchedEffect
+        }
         if (!m.prefs.hintShown) {
             delay(1500)
             m.show("Dica: segure um atalho para trocar o app")
@@ -164,12 +170,12 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
         }
     }
 
-    val pal = remember(m.theme, m.baseColor, night) { palette(m.theme, m.baseColor, night) }
+    val pal = remember(m.baseColor, night) { palette(m.baseColor, night) }
 
     // Fundo do Vidro: três manchas de cor dando uma volta a cada ~50 s (só redesenha o fundo)
     val bgAnim = rememberInfiniteTransition(label = "bg")
     val bgT = bgAnim.animateFloat(0f, 1f, infiniteRepeatable(tween(50_000, easing = LinearEasing)), label = "bgT")
-    val moving = pal.glass && m.bgMotion
+    val moving = m.bgMotion
 
     // Motor do mapa: começa um pouco depois da tela aparecer e roda escondido até ficar pronto
     var engineOn by remember { mutableStateOf(false) }
@@ -191,7 +197,7 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
                 .background(Brush.verticalGradient(listOf(pal.bg, pal.bg2)))
                 .drawBehind {
                     // Vidro: brilho suave vindo de cima, sem manchas fortes atrás do texto
-                    if (pal.glass && pal.blobs.size >= 3) {
+                    run {
                         val a = (if (moving) bgT.value else 0.15f) * 2f * PI.toFloat()
                         val w = size.width
                         val h = size.height
@@ -210,7 +216,7 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
                             )
                         }
                     }
-                    if (pal.glass) {
+                    run {
                         drawRect(
                             Brush.radialGradient(
                                 listOf(pal.glow.copy(alpha = 0.85f), Color.Transparent),
@@ -232,11 +238,9 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
                             MapSurface(mapCtl, Modifier.fillMaxSize())
                         }
                     }
-                    Screen(m, night, requestLocation)
+                    Screen(m, requestLocation)
                     m.overlay?.let { OverlayHost(m, it) }
                     if (m.screenOff) ScreenOff(m)
-                    m.crash?.let { CrashPanel(m, it) }
-                    m.info?.let { InfoPanel(m, it.first, it.second) }
                     m.toast?.let {
                         ToastPill(it, Modifier.align(Alignment.TopCenter).padding(top = 14.dp))
                     }
@@ -248,10 +252,10 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
     }
 
 @Composable
-fun Screen(m: LauncherModel, night: Boolean, requestLocation: () -> Unit) {
+fun Screen(m: LauncherModel, requestLocation: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         // A central já mostra relógio e status no topo; a barra do Painel só aparece no modo de edição
-        if (m.edit) StatusBar(m, night)
+        if (m.edit) StatusBar(m)
         BoxWithConstraints(
             Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, bottom = 12.dp, top = if (m.edit) 4.dp else 12.dp)
         ) {
@@ -274,46 +278,20 @@ fun Screen(m: LauncherModel, night: Boolean, requestLocation: () -> Unit) {
 // ---------------------------------------------------------------- barra de status
 
 @Composable
-fun StatusBar(m: LauncherModel, night: Boolean) {
+fun StatusBar(m: LauncherModel) {
     val p = LocalPal.current
-    val bg = if (m.edit) lerp(p.bg, p.ac, 0.2f) else Color.Transparent
     Row(
-        Modifier.fillMaxWidth().height(28.dp).background(bg).padding(horizontal = 14.dp),
+        Modifier.fillMaxWidth().height(28.dp).background(lerp(p.bg, p.ac, 0.2f)).padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (m.edit) {
-            T("Toque em dois blocos para trocar", 12)
-            Spacer(Modifier.weight(1f))
-            Chip("Inverter lados", Icons.Rounded.SwapHoriz, compact = true) {
-                m.updLeft(!m.left)
-                m.show(if (m.left) "Atalhos à esquerda" else "Atalhos à direita")
-            }
-            W(6)
-            Chip("Concluir", Icons.Rounded.Check, primary = true, compact = true) { m.finishEdit() }
-        } else {
-            if (m.media.hasAccess && m.media.title.isNotEmpty() && m.media.source.isNotEmpty()) {
-                Ic(Icons.Rounded.MusicNote, 13, p.tx2)
-                W(4)
-                T(m.media.source, 11, p.tx2)
-            }
-            Spacer(Modifier.weight(1f))
-            if (night) {
-                Ic(Icons.Rounded.DarkMode, 13, p.tx2)
-                W(4)
-                T("Noturno", 11, p.tx2)
-                W(12)
-            }
-            Ic(
-                if (m.online) Icons.Rounded.Wifi else Icons.Rounded.WifiOff, 14,
-                if (m.online) p.tx2 else p.tx2.copy(alpha = 0.45f)
-            )
-            W(12)
-            val fix = m.gps.hasFix(m.now)
-            val gc = if (fix) p.gps else p.tx2
-            Ic(if (fix) Icons.Rounded.GpsFixed else Icons.Rounded.GpsOff, 13, gc)
-            W(4)
-            T(if (fix) "GPS" else "Sem GPS", 11, gc)
+        T("Toque em dois blocos para trocar", 12)
+        Spacer(Modifier.weight(1f))
+        Chip("Inverter lados", Icons.Rounded.SwapHoriz, compact = true) {
+            m.updLeft(!m.left)
+            m.show(if (m.left) "Atalhos à esquerda" else "Atalhos à direita")
         }
+        W(6)
+        Chip("Concluir", Icons.Rounded.Check, primary = true, compact = true) { m.finishEdit() }
     }
 }
 
@@ -336,7 +314,7 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                 Modifier
                     .fillMaxWidth()
                     .height(rowH)
-                    .panel(p, 14, p.tiles[i])
+                    .panel(p, 14)
                     .combinedClickable(
                         enabled = !m.edit,
                         onLongClick = {
@@ -349,7 +327,7 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape((12 + p.round / 2).dp)).background(p.iconBg),
+                    Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(p.iconBg),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
@@ -360,7 +338,7 @@ fun Shortcuts(m: LauncherModel, rowH: Dp, gap: Dp) {
                     }
                 }
                 W(12)
-                T(s.label, 16, p.tileFg, FontWeight.Medium)
+                T(s.label, 16, p.tx, FontWeight.Medium)
             }
         }
         Row(Modifier.fillMaxWidth().height(rowH), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -398,14 +376,14 @@ fun SmallBtn(
     Column(
         modifier
             .fillMaxHeight()
-            .panel(p, 14, p.miniBg)
+            .panel(p, 14)
             .combinedClickable(enabled = enabled, onLongClick = onLong, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Ic(icon, 24, p.miniIcon)
+        Ic(icon, 24, p.ac)
         H(4)
-        T(label, 12, p.miniFg)
+        T(label, 12, p.tx2)
     }
 }
 
@@ -448,26 +426,18 @@ fun Block(m: LauncherModel, slot: Int, kind: String, v: Variant, modifier: Modif
     val p = LocalPal.current
     val selected = m.edit && m.sel == slot
     val isMap = kind == "speed" && m.mapLayout
-    // Cada bloco tem a sua cor no tema Blocos; o texto dentro acompanha
-    val local = when {
-        kind == "clock" -> p.copy(cd = p.clockBg, tx = p.clockFg, tx2 = p.clockMut)
-        kind == "speed" && !isMap -> p.copy(cd = p.speedBg, tx = p.speedFg, tx2 = p.speedFg.copy(alpha = 0.75f))
-        else -> p
-    }
-    Box(modifier.panel(p, 14, if (selected) lerp(local.cd, p.ac, 0.28f) else local.cd)) {
-        CompositionLocalProvider(LocalPal provides local) {
-            if (isMap) {
-                MapBlock(m, requestLocation)
-            } else {
-                Box(
-                    Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    when (kind) {
-                        "clock" -> ClockBlock(m, v)
-                        "speed" -> SpeedBlock(m, v, requestLocation)
-                        else -> MediaBlock(m, v)
-                    }
+    Box(modifier.panel(p, 14, if (selected) lerp(p.cd, p.ac, 0.28f) else p.cd)) {
+        if (isMap) {
+            MapBlock(m, requestLocation)
+        } else {
+            Box(
+                Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                when (kind) {
+                    "clock" -> ClockBlock(m, v)
+                    "speed" -> SpeedBlock(m, v, requestLocation)
+                    else -> MediaBlock(m, v)
                 }
             }
         }
@@ -538,15 +508,15 @@ fun ClockBlock(m: LauncherModel, v: Variant) {
     }
 }
 
-private data class WInfo(val icon: ImageVector, val desc: String, val tint: Color, val tintLight: Color = tint)
+private data class WInfo(val icon: ImageVector, val desc: String, val tint: Color)
 
 private fun weatherInfo(code: Int, day: Boolean): WInfo = when (code) {
-    0 -> if (day) WInfo(Icons.Rounded.WbSunny, "Ensolarado", Color(0xFFEF9F27), Color(0xFFF08C00))
+    0 -> if (day) WInfo(Icons.Rounded.WbSunny, "Ensolarado", Color(0xFFEF9F27))
     else WInfo(Icons.Rounded.NightsStay, "Céu limpo", Color(0xFFAFA9EC))
-    1, 2 -> WInfo(Icons.Rounded.WbCloudy, "Poucas nuvens", Color(0xFFD3D1C7), Color(0xFF4F8FD6))
-    3 -> WInfo(Icons.Rounded.Cloud, "Nublado", Color(0xFFB4B2A9), Color(0xFF6B7A90))
+    1, 2 -> WInfo(Icons.Rounded.WbCloudy, "Poucas nuvens", Color(0xFFD3D1C7))
+    3 -> WInfo(Icons.Rounded.Cloud, "Nublado", Color(0xFFB4B2A9))
     45, 48 -> WInfo(Icons.Rounded.Cloud, "Neblina", Color(0xFFB4B2A9))
-    in 51..67, in 80..82 -> WInfo(Icons.Rounded.Umbrella, "Chuva", Color(0xFF85B7EB), Color(0xFF1A73E8))
+    in 51..67, in 80..82 -> WInfo(Icons.Rounded.Umbrella, "Chuva", Color(0xFF85B7EB))
     in 71..77, 85, 86 -> WInfo(Icons.Rounded.AcUnit, "Neve", Color(0xFFB5D4F4))
     in 95..99 -> WInfo(Icons.Rounded.FlashOn, "Tempestade", Color(0xFFFAC775))
     else -> WInfo(Icons.Rounded.Cloud, "Tempo", Color(0xFFB4B2A9))
@@ -566,11 +536,7 @@ fun WeatherView(m: LauncherModel) {
         else -> "Há ${age / 3_600_000}h"
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        val tint = when {
-            p.night -> lerp(info.tint, p.bg, 0.25f)
-            p.light -> info.tintLight
-            else -> info.tint
-        }
+        val tint = if (p.night) lerp(info.tint, p.bg, 0.25f) else info.tint
         Ic(info.icon, 32, tint)
         W(10)
         Column {
@@ -848,33 +814,6 @@ fun OverlayHost(m: LauncherModel, o: Overlay) {
             is Overlay.Picker -> PickerPanel(m, o.target, card(Modifier.width(500.dp)))
             Overlay.Config -> ConfigPanel(m, card(Modifier.width(580.dp)))
             Overlay.Apps -> AppsPanel(m, card(Modifier.fillMaxSize(0.94f)))
-            Overlay.VolumeLab -> Column(card(Modifier.width(600.dp))) {
-                PanelHeader("Testes de volume") { m.overlay = Overlay.Config }
-                T("Toque em cada teste com música tocando e veja se o som ou o número da central muda.", 12, p.tx2, maxLines = 2)
-                H(8)
-                Row(Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f).heightIn(max = 230.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        VolumeLab.tests.forEachIndexed { i, t -> Chip(t.name) { m.runVolumeTest(i) } }
-                    }
-                    W(10)
-                    Column(Modifier.weight(1f)) {
-                        Box(
-                            Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF0B0D10))
-                                .verticalScroll(rememberScrollState()).padding(8.dp)
-                        ) {
-                            BasicText(
-                                m.labLog.ifEmpty { "Resultados aparecem aqui" },
-                                style = TextStyle(color = Color(0xFFE6E9EE), fontSize = 9.sp, lineHeight = 11.sp,
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                            )
-                        }
-                        H(8)
-                        Chip("Copiar resultados", primary = true) { m.copyText(m.labLog) }
-                        H(6)
-                        Chip("Salvar apps da central") { m.overlay = null; m.exportVendorApps() }
-                    }
-                }
-            }
             Overlay.Colors -> Column(card(Modifier.width(580.dp))) {
                 PanelHeader("Cor base") { m.overlay = Overlay.Config }
                 BaseColorPicker(m)
@@ -1027,13 +966,8 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                     m.edit = true
                 }
             }
-            SetRow("Tema") {
-                Seg(listOf("Vidro", "Blocos"), m.theme) { m.updTheme(it) }
-            }
-            if (m.theme == THEME_GLASS) {
-                SetRow("Fundo em movimento") {
-                    Seg(listOf("Não", "Sim"), if (m.bgMotion) 1 else 0) { m.updBgMotion(it == 1) }
-                }
+            SetRow("Fundo em movimento") {
+                Seg(listOf("Não", "Sim"), if (m.bgMotion) 1 else 0) { m.updBgMotion(it == 1) }
             }
             SetRow("Cor base") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1053,15 +987,6 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                     MapDl.IDLE -> Chip("Baixar (~20 MB)", primary = true) { m.downloadMap() }
                 }
             }
-            SetRow("Modo noturno") {
-                Seg(listOf("Desligado", "Automático", "Sempre"), m.nightMode) { m.updNight(it) }
-            }
-            if (m.nightMode == 1) {
-                val (on, off) = m.nightWindow()
-                val f = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                T("Pelo pôr do sol: liga às ${f.format(java.util.Date(on))}, desliga às ${f.format(java.util.Date(off))}",
-                    13, p.tx2, align = TextAlign.End, modifier = Modifier.fillMaxWidth())
-            }
             SetRow("Baixar brilho à noite") {
                 Seg(listOf("Não", "Sim"), if (m.dimScreen) 1 else 0) { v ->
                     if (v == 1 && !m.writeOk) {
@@ -1071,6 +996,12 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
                     m.updDim(v == 1)
                 }
             }
+            if (m.dimScreen) {
+                val (on, off) = m.nightWindow()
+                val f = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                T("Pelo pôr do sol: das ${f.format(java.util.Date(on))} às ${f.format(java.util.Date(off))}",
+                    13, p.tx2, align = TextAlign.End, modifier = Modifier.fillMaxWidth())
+            }
             SetRow("Alerta de velocidade") {
                 Seg(listOf("Desligado", "100", "110", "120"), ALERT_OPTS.indexOf(m.alertKmh).coerceAtLeast(0)) {
                     m.updAlert(ALERT_OPTS[it])
@@ -1078,12 +1009,6 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
             }
             SetRow("Mostrar mídia") {
                 Seg(listOf("Não", "Sim"), if (m.showMedia) 1 else 0) { m.updMedia(it == 1) }
-            }
-            SetRow("Testes de volume") {
-                Chip("Abrir") { m.overlay = Overlay.VolumeLab }
-            }
-            SetRow("Diagnóstico de volume") {
-                Chip("Gerar") { m.overlay = null; m.volumeDiagnostics() }
             }
             SetRow("Acesso à mídia") {
                 Chip(if (m.media.hasAccess) "Liberado" else "Liberar", Icons.Rounded.Notifications) {
@@ -1119,7 +1044,7 @@ fun Seg(opts: List<String>, selected: Int, onSelect: (Int) -> Unit) {
         opts.forEachIndexed { i, o ->
             Box(
                 Modifier
-                    .clip(RoundedCornerShape((7 + p.round).dp))
+                    .clip(RoundedCornerShape(15.dp))
                     .background(if (i == selected) p.ac else Color.Transparent)
                     .clickable { onSelect(i) }
                     .padding(horizontal = 16.dp, vertical = 11.dp)
@@ -1229,11 +1154,11 @@ fun H(n: Int) = Spacer(Modifier.height(n.dp))
 
 /** Fundo + borda visível: no sol forte a borda é o que separa um botão do outro. */
 fun Modifier.panel(p: Pal, radius: Int, bg: Color = p.cd, border: Boolean = true): Modifier {
-    val shape = RoundedCornerShape((radius + p.round).dp)
-    if (p.glass && bg == p.cd) {
-        // Vidro: sombra, degradê de cima para baixo e borda que reflete a luz no topo
-        val lifted = if (radius >= 14) this.shadow(8.dp, shape, ambientColor = p.shadow, spotColor = p.shadow) else this
-        return lifted
+    val shape = RoundedCornerShape((radius + 8).dp)
+    if (bg == p.cd) {
+        // Vidro: degradê de cima para baixo e borda que reflete a luz no topo.
+        // Sem sombra do sistema: atrás de um card translúcido ela aparece como um retângulo claro deslocado.
+        return this
             .clip(shape)
             .background(Brush.verticalGradient(listOf(p.cdTop, p.cdBottom)))
             .border(1.dp, Brush.verticalGradient(listOf(p.edgeTop, p.edgeBottom)), shape)
@@ -1318,39 +1243,6 @@ fun ChannelSlider(label: String, value: Int, from: Color, to: Color, onChange: (
 }
 
 
-@Composable
-fun CrashPanel(m: LauncherModel, text: String) {
-    val p = LocalPal.current
-    Box(
-        Modifier.fillMaxSize().background(Color(0xB3000000)).clickable(
-            interactionSource = remember { MutableInteractionSource() }, indication = null
-        ) {},
-        contentAlignment = Alignment.Center
-    ) {
-        Column(Modifier.width(520.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF15181D)).padding(16.dp)) {
-            T("O Painel fechou da última vez", 16, Color.White, FontWeight.Medium)
-            H(4)
-            T("Copie o erro e mande no chat para eu corrigir.", 12, Color(0xFFB7BEC8))
-            H(10)
-            Box(
-                Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF0B0D10))
-                    .verticalScroll(rememberScrollState()).padding(8.dp)
-            ) {
-                BasicText(
-                    text,
-                    style = TextStyle(color = Color(0xFFE6E9EE), fontSize = 9.sp, lineHeight = 11.sp,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                )
-            }
-            H(12)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip("Copiar erro", primary = true) { m.copyCrash() }
-                Chip("Fechar") { m.dismissCrash() }
-            }
-        }
-    }
-}
-
 
 /** Nada tocando: atalhos grandes para começar a ouvir */
 @Composable
@@ -1423,37 +1315,4 @@ fun Skeleton(modifier: Modifier) {
             )
         }
     )
-}
-
-
-@Composable
-fun InfoPanel(m: LauncherModel, title: String, text: String) {
-    Box(
-        Modifier.fillMaxSize().background(Color(0xCC000000)).clickable(
-            interactionSource = remember { MutableInteractionSource() }, indication = null
-        ) {},
-        contentAlignment = Alignment.Center
-    ) {
-        Column(Modifier.width(560.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF15181D)).padding(16.dp)) {
-            T(title, 16, Color.White, FontWeight.Medium)
-            H(4)
-            T("Copie e mande no chat.", 12, Color(0xFFB7BEC8))
-            H(10)
-            Box(
-                Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF0B0D10))
-                    .verticalScroll(rememberScrollState()).padding(8.dp)
-            ) {
-                BasicText(
-                    text,
-                    style = TextStyle(color = Color(0xFFE6E9EE), fontSize = 9.sp, lineHeight = 11.sp,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                )
-            }
-            H(12)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip("Copiar", primary = true) { m.copyText(text) }
-                Chip("Fechar") { m.info = null }
-            }
-        }
-    }
 }

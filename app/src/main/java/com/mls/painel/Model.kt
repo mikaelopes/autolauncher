@@ -22,7 +22,6 @@ sealed class Overlay {
     object Config : Overlay()
     object Apps : Overlay()
     object Colors : Overlay()
-    object VolumeLab : Overlay()
 }
 
 class LauncherModel(val ctx: Context) {
@@ -41,15 +40,7 @@ class LauncherModel(val ctx: Context) {
         private set
     var order by mutableStateOf(prefs.order)
         private set
-    var accent by mutableStateOf(prefs.accent)
-        private set
-    var base by mutableStateOf(prefs.base)
-        private set
-    var nightMode by mutableStateOf(prefs.nightMode)
-        private set
     var showMedia by mutableStateOf(prefs.showMedia)
-        private set
-    var theme by mutableStateOf(prefs.theme)
         private set
     var baseColor by mutableStateOf(prefs.baseColor)
         private set
@@ -70,41 +61,23 @@ class LauncherModel(val ctx: Context) {
     var alertKmh by mutableStateOf(prefs.alertKmh)
         private set
 
-    /** Texto do último fechamento inesperado, se houver */
-    var crash by mutableStateOf(CrashInfo.collect(ctx, prefs))
+
+    /** Aviso para mostrar quando a tela abrir (ex.: mapa desligado pela proteção) */
+    private var startNotice: String? = null
 
     init {
-        // Launcher não pode ficar em loop: se fechou com o mapa ligado, desliga o mapa
-        // Uma interrupção só (central desligada com a ignição, reinício) não conta:
-        // o mapa só é desligado se o app morrer duas vezes seguidas abrindo o mapa.
+        // Launcher não pode ficar em loop: se o app morrer duas vezes seguidas abrindo o mapa,
+        // o mapa é desligado. Uma interrupção só (central desligada com a ignição) não conta.
         if (prefs.mapOpening) prefs.mapFails = prefs.mapFails + 1
         prefs.mapOpening = false
         if (prefs.mapFails >= 2 && prefs.showMap) {
-            updMap(false)
             prefs.mapFails = 0
-            crash = "Desliguei o mapa porque o Painel fechou duas vezes seguidas abrindo ele. " +
-                "Pode religar em Ajustes.\n\n" + (crash ?: "")
+            updMap(false)
+            startNotice = "Mapa desligado: o Painel fechou ao abrir. Religue em Ajustes"
         }
     }
 
-    fun dismissCrash() {
-        try {
-            java.io.File(ctx.filesDir, PainelApp.CRASH_FILE).delete()
-        } catch (e: Exception) {
-        }
-        crash = null
-    }
-
-    fun copyCrash() {
-        val txt = crash ?: return
-        try {
-            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("Erro do Painel", txt))
-            show("Erro copiado")
-        } catch (e: Exception) {
-            show("Não deu para copiar")
-        }
-    }
+    fun takeStartNotice(): String? = startNotice.also { startNotice = null }
 
     var edit by mutableStateOf(false)
     var sel by mutableStateOf<Int?>(null)
@@ -171,11 +144,7 @@ class LauncherModel(val ctx: Context) {
 
     fun updLeft(v: Boolean) { left = v; prefs.leftSide = v }
     fun updOrder(v: List<String>) { order = v; prefs.order = v }
-    fun updAccent(v: Int) { accent = v; prefs.accent = v }
-    fun updBase(v: Int) { base = v; prefs.base = v }
-    fun updNight(v: Int) { nightMode = v; prefs.nightMode = v }
     fun updMedia(v: Boolean) { showMedia = v; prefs.showMedia = v }
-    fun updTheme(v: Int) { theme = v; prefs.theme = v }
 
     /** Só atualiza a tela; salva quando soltar o controle. */
     fun previewBase(v: Int) { baseColor = v }
@@ -264,8 +233,6 @@ class LauncherModel(val ctx: Context) {
     }
 
     fun isNight(): Boolean {
-        if (nightMode == 2) return true
-        if (nightMode == 0) return false
         val (on, off) = nightWindow()
         return now >= on || now < off
     }
@@ -337,11 +304,7 @@ class LauncherModel(val ctx: Context) {
         }
     }
 
-    /** dir: +1 aumenta, -1 diminui. Sem permissão especial. */
-    /**
-     * Mesmo caminho do botão físico de volume: o sistema decide qual volume mexer e mostra
-     * o painel de volume da central (em muitas centrais é aí que o fabricante intercepta).
-     */
+    /** dir: +1 aumenta, -1 diminui */
     fun volume(dir: Int) {
         volExec.execute { stepVolume(dir) }
     }
@@ -398,90 +361,6 @@ class LauncherModel(val ctx: Context) {
     /** Volume guardado ao ativar o mudo (-1 = não está mudo pelo Painel) */
     private var savedVol = -1
 
-    /** Testes de volume: resultado de cada tentativa */
-    var labLog by mutableStateOf("")
-
-    fun exportVendorApps() {
-        show("Salvando apps…")
-        val main = android.os.Handler(android.os.Looper.getMainLooper())
-        Thread {
-            val r = try { VolumeLab.exportApks(ctx) } catch (e: Throwable) { "Erro: $e" }
-            main.post { info = "Apps da central" to r }
-        }.start()
-    }
-
-    fun runVolumeTest(i: Int) {
-        val t = VolumeLab.tests[i]
-        val before = VolumeLab.read(ctx)
-        val v = VolumeLab.mcuVolume(ctx) ?: vol
-        val r = try { t.run(ctx, v) } catch (e: Exception) { "erro: ${e.message}" }
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            val after = VolumeLab.read(ctx)
-            labLog = "${t.name}: $r\nantes:  $before\ndepois: $after\n\n" + labLog
-        }, 700)
-    }
-
-    /** Janela de informação com botão de copiar (diagnósticos) */
-    var info by mutableStateOf<Pair<String, String>?>(null)
-
-    fun volumeDiagnostics() {
-        show("Gerando diagnóstico…")
-        val main = android.os.Handler(android.os.Looper.getMainLooper())
-        Thread {
-            val txt = try {
-                buildDiagnostics()
-            } catch (e: Throwable) {
-                "Erro ao gerar: $e"
-            }
-            main.post { info = "Diagnóstico de volume" to txt }
-        }.start()
-    }
-
-    private fun buildDiagnostics(): String {
-        val sb = StringBuilder()
-        sb.append("Painel ").append(BuildConfigInfoCtx.version(ctx)).append('\n')
-        sb.append("Fabricante: ").append(android.os.Build.MANUFACTURER).append(" / ").append(android.os.Build.BRAND).append('\n')
-        sb.append("Modelo: ").append(android.os.Build.MODEL).append(" · placa ").append(android.os.Build.BOARD)
-            .append(" · hw ").append(android.os.Build.HARDWARE).append('\n')
-        sb.append("Produto: ").append(android.os.Build.PRODUCT).append(" / ").append(android.os.Build.DEVICE).append('\n')
-        sb.append("Android ").append(android.os.Build.VERSION.RELEASE).append(" · ").append(android.os.Build.DISPLAY).append("\n\n")
-        try {
-            sb.append("Volume fixo: ").append(audio.isVolumeFixed).append('\n')
-        } catch (e: Exception) {
-        }
-        val names = listOf("voz", "sistema", "toque", "música", "alarme", "notificação", "bt sco", "sistema forçado", "dtmf", "tts", "acessibilidade")
-        for (i in 0..10) {
-            try {
-                sb.append("stream ").append(i).append(" (").append(names.getOrElse(i) { "?" }).append("): ")
-                    .append(audio.getStreamVolume(i)).append('/').append(audio.getStreamMaxVolume(i)).append('\n')
-            } catch (e: Exception) {
-            }
-        }
-        sb.append("\nApps de sistema relacionados:\n")
-        val keys = listOf("syu", "fyt", "mcu", "car", "audio", "volume", "canbus", "sound", "dsp", "eq", "yt", "ts.", "hct", "setting", "service", "radio", "bt", "launcher")
-        try {
-            val pkgs = ctx.packageManager.getInstalledApplications(0)
-                .filter { (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 }
-                .map { it.packageName }
-                .filter { p -> keys.any { p.lowercase().contains(it) } && !p.startsWith("com.google") }
-                .sorted()
-            pkgs.forEach { sb.append(it).append('\n') }
-        } catch (e: Exception) {
-            sb.append("(não foi possível listar)\n")
-        }
-        return sb.toString() + "\n--- configurações de volume ---\n" + VolumeLab.dumpSettings(ctx) +
-            "\n--- sistema do fabricante ---" + VendorScan.run(ctx)
-    }
-
-    fun copyText(txt: String) {
-        try {
-            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("Painel", txt))
-            show("Copiado")
-        } catch (e: Exception) {
-            show("Não deu para copiar")
-        }
-    }
 
     fun toggleMute() {
         volExec.execute {

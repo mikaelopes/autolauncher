@@ -40,36 +40,9 @@ class Prefs(ctx: Context) {
         }
         set(v) = p.edit().putString("order", v.joinToString(",")).apply()
 
-    var accent: Int
-        get() = p.getInt("accent", 0)
-        set(v) = p.edit().putInt("accent", v).apply()
-
-    var base: Int
-        get() = p.getInt("base", 0)
-        set(v) = p.edit().putInt("base", v).apply()
-
-    /** 0 = desligado, 1 = automático, 2 = sempre */
-    var nightMode: Int
-        get() = p.getInt("night_mode", 1)
-        set(v) = p.edit().putInt("night_mode", v).apply()
-
-    /** true = tema claro de alto contraste durante o dia */
-    var dayLight: Boolean
-        get() = p.getBoolean("day_light", true)
-        set(v) = p.edit().putBoolean("day_light", v).apply()
-
-    /** 0 = Vidro, 1 = Blocos */
-    var theme: Int
-        get() = p.getInt("theme2", THEME_BLOCKS)
-        set(v) = p.edit().putInt("theme2", v).apply()
-
     var baseColor: Int
         get() = p.getInt("base_color", DEFAULT_BASE)
         set(v) = p.edit().putInt("base_color", v).apply()
-
-    var lastExitSeen: Long
-        get() = p.getLong("last_exit_seen", 0L)
-        set(v) = p.edit().putLong("last_exit_seen", v).apply()
 
     /** true enquanto o mapa está sendo criado; se o app morrer nesse meio, o mapa é desligado */
     var mapOpening: Boolean

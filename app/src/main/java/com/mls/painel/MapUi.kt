@@ -37,9 +37,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.location.LocationComponentActivationOptions
-import org.maplibre.android.location.modes.CameraMode
-import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
@@ -158,22 +155,6 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
         val mm = ctl.map ?: return@LaunchedEffect
         mm.setStyle(Style.Builder().fromUri(MapCfg.STYLE)) { st ->
             paintMap(st, mp)
-            if (m.gps.hasPermission()) {
-                try {
-                    val lc = mm.locationComponent
-                    lc.activateLocationComponent(
-                        LocationComponentActivationOptions.builder(ctx, st)
-                            .useDefaultLocationEngine(false)
-                            .build()
-                    )
-                    // Marcador próprio (desenhado em Compose) no lugar do da biblioteca
-                    lc.isLocationComponentEnabled = false
-                    lc.cameraMode = CameraMode.NONE
-                    lc.renderMode = RenderMode.GPS
-                    m.gps.lastLoc?.let { lc.forceLocationUpdate(it) }
-                } catch (e: Exception) {
-                }
-            }
             ctl.style = st
         }
     }
@@ -190,7 +171,7 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
         }
     }
 
-    // Repinta quando muda tema, dia/noite ou cor base
+    // Repinta quando muda a cor base
     LaunchedEffect(ctl.style, mp) {
         ctl.style?.let { paintMap(it, mp) }
     }
@@ -216,12 +197,6 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
         ctl.shownLoc = l
         ctl.updateMarker()
         val bearing = (snap?.bearing ?: m.gps.heading).toDouble()
-        if (st != null) {
-            try {
-                mm.locationComponent.forceLocationUpdate(l)
-            } catch (e: Exception) {
-            }
-        }
         if (!ctl.follow) return@LaunchedEffect
         val zoom = when {
             kmh < 25 -> 17.5
@@ -323,12 +298,12 @@ fun SpeedBadge(m: LauncherModel, modifier: Modifier) {
     val sp by animateFloatAsState(if (fix) m.gps.speedKmh else 0f, tween(450), label = "badge")
     val over = m.alertKmh > 0 && sp > m.alertKmh
     Row(
-        modifier.panel(p, 12, if (over) p.red else if (p.glass) p.sheet else p.speedBg).padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier.panel(p, 12, if (over) p.red else p.sheet).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        T(if (fix) sp.roundToInt().toString() else "--", 30, if (over) androidx.compose.ui.graphics.Color.White else if (p.glass) p.tx else p.speedFg, FontWeight.Medium)
+        T(if (fix) sp.roundToInt().toString() else "--", 30, if (over) androidx.compose.ui.graphics.Color.White else p.tx, FontWeight.Medium)
         W(4)
-        T("km/h", 12, if (over) androidx.compose.ui.graphics.Color.White else if (p.glass) p.tx2 else p.speedFg.copy(alpha = 0.75f), modifier = Modifier.padding(bottom = 5.dp))
+        T("km/h", 12, if (over) androidx.compose.ui.graphics.Color.White else p.tx2, modifier = Modifier.padding(bottom = 5.dp))
     }
 }
 
