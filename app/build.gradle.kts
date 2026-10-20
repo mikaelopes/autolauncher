@@ -12,8 +12,8 @@ android {
         applicationId = "com.mls.painel"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.18"
+        versionCode = 20
+        versionName = "1.19"
     }
 
     // Chave fixa: assim cada APK novo atualiza por cima do anterior sem desinstalar.

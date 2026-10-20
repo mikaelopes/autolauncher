@@ -66,6 +66,10 @@ class MapCtl(val view: MapView) {
     var street by mutableStateOf("")
     /** Estilo carregado e primeiros blocos desenhados: pronto para ir para a tela */
     var shown by mutableStateOf(false)
+    /** Rua em que o carro foi "encaixado" por último (evita pular para ruas paralelas) */
+    var roadKey: String? = null
+    /** Posição mostrada (encaixada na rua quando faz sentido) */
+    var shownLoc: android.location.Location? = null
 }
 
 val LocalMap = staticCompositionLocalOf<MapCtl?> { null }
@@ -168,15 +172,30 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
     // Segue o carro: aproxima mais devagar, afasta em velocidade, mapa gira com a direção
     LaunchedEffect(ctl.map, ctl.style, m.gps.lastFix, ctl.follow) {
         val mm = ctl.map ?: return@LaunchedEffect
-        val l = m.gps.lastLoc ?: return@LaunchedEffect
-        if (ctl.style != null) {
+        val raw = m.gps.lastLoc ?: return@LaunchedEffect
+        val kmh = m.gps.speedKmh
+        // Encaixa na rua só andando e com GPS razoável; parado (estacionamento) ou GPS ruim, posição real
+        val acc = if (raw.hasAccuracy()) raw.accuracy else 20f
+        val st = ctl.style
+        val snap = if (st != null && kmh >= 8f && acc <= 50f)
+            snapToRoad(st, raw.latitude, raw.longitude, m.gps.heading, acc, ctl.roadKey) else null
+        ctl.roadKey = snap?.key
+        val l = android.location.Location(raw).apply {
+            if (snap != null) {
+                latitude = snap.lat
+                longitude = snap.lon
+                bearing = snap.bearing
+            }
+        }
+        ctl.shownLoc = l
+        val bearing = (snap?.bearing ?: m.gps.heading).toDouble()
+        if (st != null) {
             try {
                 mm.locationComponent.forceLocationUpdate(l)
             } catch (e: Exception) {
             }
         }
         if (!ctl.follow) return@LaunchedEffect
-        val kmh = m.gps.speedKmh
         val zoom = when {
             kmh < 25 -> 17.5
             kmh < 60 -> 17.0
@@ -190,7 +209,7 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
                 CameraPosition.Builder()
                     .target(LatLng(l.latitude, l.longitude))
                     .zoom(zoom)
-                    .bearing(m.gps.heading.toDouble())
+                    .bearing(bearing)
                     .padding(0.0, ahead, 0.0, 0.0)
                     .build()
             ),
@@ -202,7 +221,7 @@ fun rememberMapEngine(m: LauncherModel): MapCtl {
     var lastQuery by remember { mutableStateOf(0L) }
     LaunchedEffect(ctl.style, m.gps.lastFix) {
         val st = ctl.style ?: return@LaunchedEffect
-        val l = m.gps.lastLoc ?: return@LaunchedEffect
+        val l = ctl.shownLoc ?: m.gps.lastLoc ?: return@LaunchedEffect
         val now = System.currentTimeMillis()
         if (now - lastQuery < 2000) return@LaunchedEffect
         lastQuery = now
@@ -378,6 +397,77 @@ fun nearestStreet(st: Style, lat: Double, lon: Double, heading: Float): String? 
                 if (score < bestScore) {
                     bestScore = score
                     best = name
+                }
+            }
+        }
+    }
+    return best
+}
+
+
+class Snap(val lat: Double, val lon: Double, val bearing: Float, val key: String)
+
+private val DRIVABLE_SKIP = setOf("path", "track", "rail", "transit", "ferry", "raceway", "pier", "bridge_path")
+
+/**
+ * "Map matching" simples: procura nas vias do mapa offline o trecho mais provável para o carro.
+ * Pontua por distância, por alinhamento com a direção do carro e dá preferência à via atual.
+ * Devolve null se nenhuma via compatível estiver perto o bastante (aí usa a posição real).
+ */
+fun snapToRoad(st: Style, lat: Double, lon: Double, heading: Float, accuracy: Float, prevKey: String?): Snap? {
+    val src = st.getSourceAs<VectorSource>("openmaptiles") ?: return null
+    val feats = try {
+        src.querySourceFeatures(arrayOf("transportation"), null)
+    } catch (e: Exception) {
+        return null
+    }
+    val maxDist = (accuracy * 1.5).coerceIn(12.0, 35.0)
+    val kx = cos(Math.toRadians(lat)) * 111_320.0
+    val ky = 110_540.0
+    var best: Snap? = null
+    var bestScore = Double.MAX_VALUE
+    for (f in feats) {
+        val cls = f.getStringProperty("class") ?: ""
+        if (cls in DRIVABLE_SKIP) continue
+        val lines: List<List<Point>> = when (val g = f.geometry()) {
+            is LineString -> listOf(g.coordinates())
+            is MultiLineString -> g.coordinates()
+            else -> continue
+        }
+        for (pts in lines) {
+            if (pts.size < 2) continue
+            val key = "%.5f,%.5f".format(pts[0].latitude(), pts[0].longitude())
+            for (i in 0 until pts.size - 1) {
+                val ax = (pts[i].longitude() - lon) * kx
+                val ay = (pts[i].latitude() - lat) * ky
+                val bx = (pts[i + 1].longitude() - lon) * kx
+                val by = (pts[i + 1].latitude() - lat) * ky
+                val dx = bx - ax
+                val dy = by - ay
+                val len2 = dx * dx + dy * dy
+                if (len2 < 0.25) continue
+                val t = (-(ax * dx + ay * dy) / len2).coerceIn(0.0, 1.0)
+                val px = ax + t * dx
+                val py = ay + t * dy
+                val d = sqrt(px * px + py * py)
+                if (d > maxDist) continue
+                // Direção do trecho no sentido mais próximo da direção do carro
+                var segDeg = Math.toDegrees(atan2(dx, dy)).toFloat()
+                var diff = abs(((segDeg - heading) % 360 + 540) % 360 - 180)
+                if (diff > 90) {
+                    segDeg += 180f
+                    diff = 180 - diff
+                }
+                if (diff > 50) continue // via cruzando a direção do carro: não é essa
+                val score = d + diff * 0.3 - (if (key == prevKey) 6.0 else 0.0)
+                if (score < bestScore) {
+                    bestScore = score
+                    best = Snap(
+                        lat = lat + py / ky,
+                        lon = lon + px / kx,
+                        bearing = ((segDeg % 360) + 360) % 360,
+                        key = key
+                    )
                 }
             }
         }
