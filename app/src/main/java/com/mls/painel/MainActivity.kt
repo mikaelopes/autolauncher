@@ -40,6 +40,12 @@ class MainActivity : ComponentActivity() {
             LauncherApp(model) { requestLocation() }
         }
 
+        // A imagem de carregamento só serve para a abertura; depois o fundo da janela vira cor lisa,
+        // senão ela aparece na faixa de cima onde fica a barra da central.
+        window.decorView.post {
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(palette(model.baseColor, false).bg.argb()))
+        }
+
         if (!model.gps.hasPermission()) requestLocation()
     }
 
