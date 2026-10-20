@@ -36,3 +36,12 @@ object BuildConfigInfo {
         "?"
     }
 }
+
+
+object BuildConfigInfoCtx {
+    fun version(ctx: android.content.Context): String = try {
+        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "?"
+    } catch (_: Exception) {
+        "?"
+    }
+}

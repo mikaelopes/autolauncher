@@ -236,6 +236,7 @@ fun LauncherApp(m: LauncherModel, requestLocation: () -> Unit) {
                     m.overlay?.let { OverlayHost(m, it) }
                     if (m.screenOff) ScreenOff(m)
                     m.crash?.let { CrashPanel(m, it) }
+                    m.info?.let { InfoPanel(m, it.first, it.second) }
                     m.toast?.let {
                         ToastPill(it, Modifier.align(Alignment.TopCenter).padding(top = 36.dp))
                     }
@@ -1051,6 +1052,9 @@ fun ConfigPanel(m: LauncherModel, modifier: Modifier) {
             SetRow("Mostrar mídia") {
                 Seg(listOf("Não", "Sim"), if (m.showMedia) 1 else 0) { m.updMedia(it == 1) }
             }
+            SetRow("Diagnóstico de volume") {
+                Chip("Gerar") { m.overlay = null; m.volumeDiagnostics() }
+            }
             SetRow("Acesso à mídia") {
                 Chip(if (m.media.hasAccess) "Liberado" else "Liberar", Icons.Rounded.Notifications) {
                     m.openNotifAccess()
@@ -1371,4 +1375,37 @@ fun Skeleton(modifier: Modifier) {
             )
         }
     )
+}
+
+
+@Composable
+fun InfoPanel(m: LauncherModel, title: String, text: String) {
+    Box(
+        Modifier.fillMaxSize().background(Color(0xCC000000)).clickable(
+            interactionSource = remember { MutableInteractionSource() }, indication = null
+        ) {},
+        contentAlignment = Alignment.Center
+    ) {
+        Column(Modifier.width(560.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF15181D)).padding(16.dp)) {
+            T(title, 16, Color.White, FontWeight.Medium)
+            H(4)
+            T("Copie e mande no chat.", 12, Color(0xFFB7BEC8))
+            H(10)
+            Box(
+                Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF0B0D10))
+                    .verticalScroll(rememberScrollState()).padding(8.dp)
+            ) {
+                BasicText(
+                    text,
+                    style = TextStyle(color = Color(0xFFE6E9EE), fontSize = 9.sp, lineHeight = 11.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                )
+            }
+            H(12)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip("Copiar", primary = true) { m.copyText(text) }
+                Chip("Fechar") { m.info = null }
+            }
+        }
+    }
 }

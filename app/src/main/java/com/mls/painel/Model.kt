@@ -332,18 +332,68 @@ class LauncherModel(val ctx: Context) {
     }
 
     /** dir: +1 aumenta, -1 diminui. Sem permissão especial. */
+    /**
+     * Mesmo caminho do botão físico de volume: o sistema decide qual volume mexer e mostra
+     * o painel de volume da central (em muitas centrais é aí que o fabricante intercepta).
+     */
     fun volume(dir: Int) {
         try {
-            if (muted && dir > 0) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
-            audio.adjustStreamVolume(
-                AudioManager.STREAM_MUSIC,
+            audio.adjustSuggestedStreamVolume(
                 if (dir > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
-                0
+                AudioManager.USE_DEFAULT_STREAM_TYPE,
+                AudioManager.FLAG_SHOW_UI
             )
         } catch (e: Exception) {
         }
         readVolume()
-        show("Volume ${'$'}vol")
+    }
+
+    /** Janela de informação com botão de copiar (diagnósticos) */
+    var info by mutableStateOf<Pair<String, String>?>(null)
+
+    fun volumeDiagnostics() {
+        val sb = StringBuilder()
+        sb.append("Painel ").append(BuildConfigInfoCtx.version(ctx)).append('\n')
+        sb.append("Fabricante: ").append(android.os.Build.MANUFACTURER).append(" / ").append(android.os.Build.BRAND).append('\n')
+        sb.append("Modelo: ").append(android.os.Build.MODEL).append(" · placa ").append(android.os.Build.BOARD)
+            .append(" · hw ").append(android.os.Build.HARDWARE).append('\n')
+        sb.append("Produto: ").append(android.os.Build.PRODUCT).append(" / ").append(android.os.Build.DEVICE).append('\n')
+        sb.append("Android ").append(android.os.Build.VERSION.RELEASE).append(" · ").append(android.os.Build.DISPLAY).append("\n\n")
+        try {
+            sb.append("Volume fixo: ").append(audio.isVolumeFixed).append('\n')
+        } catch (e: Exception) {
+        }
+        val names = listOf("voz", "sistema", "toque", "música", "alarme", "notificação", "bt sco", "sistema forçado", "dtmf", "tts", "acessibilidade")
+        for (i in 0..10) {
+            try {
+                sb.append("stream ").append(i).append(" (").append(names.getOrElse(i) { "?" }).append("): ")
+                    .append(audio.getStreamVolume(i)).append('/').append(audio.getStreamMaxVolume(i)).append('\n')
+            } catch (e: Exception) {
+            }
+        }
+        sb.append("\nApps de sistema relacionados:\n")
+        val keys = listOf("syu", "fyt", "mcu", "car", "audio", "volume", "canbus", "sound", "dsp", "eq", "yt", "ts.", "hct", "setting", "service", "radio", "bt", "launcher")
+        try {
+            val pkgs = ctx.packageManager.getInstalledApplications(0)
+                .filter { (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 }
+                .map { it.packageName }
+                .filter { p -> keys.any { p.lowercase().contains(it) } && !p.startsWith("com.google") }
+                .sorted()
+            pkgs.forEach { sb.append(it).append('\n') }
+        } catch (e: Exception) {
+            sb.append("(não foi possível listar)\n")
+        }
+        info = "Diagnóstico de volume" to sb.toString()
+    }
+
+    fun copyText(txt: String) {
+        try {
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("Painel", txt))
+            show("Copiado")
+        } catch (e: Exception) {
+            show("Não deu para copiar")
+        }
     }
 
     fun toggleMute() {
